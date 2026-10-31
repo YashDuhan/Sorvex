@@ -1,0 +1,24 @@
+{
+	"mode": "json",
+	"files": { "a.txt": "alpha\n", "b.txt": "beta\n" },
+	"prompts": ["have two scouts look at a.txt and b.txt"],
+	"turns": [
+		{
+			"toolCalls": [
+				{
+					"name": "subagent",
+					"args": {
+						"tasks": [
+							{ "agent": "scout", "task": "Summarize a.txt" },
+							{ "agent": "scout", "task": "Summarize b.txt" }
+						]
+					}
+				}
+			]
+		},
+		{ "toolCalls": [{ "name": "read", "args": { "path": "a.txt" } }] },
+		{ "text": "The file has one line." },
+		{ "text": "The file has one line." },
+		{ "text": "Both files have one line." }
+	]
+}

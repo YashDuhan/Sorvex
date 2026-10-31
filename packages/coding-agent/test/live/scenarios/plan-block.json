@@ -1,0 +1,22 @@
+{
+	"mode": "json",
+	"args": ["--plan"],
+	"files": { "target.txt": "old text\n" },
+	"expectFiles": { "target.txt": "old text" },
+	"prompts": ["change the file"],
+	"turns": [
+		{ "toolCalls": [{ "name": "read", "args": { "path": "target.txt" } }] },
+		{
+			"toolCalls": [
+				{
+					"name": "edit",
+					"args": { "path": "target.txt", "edits": [{ "oldText": "old text", "newText": "new text" }] },
+					"expectError": true
+				}
+			]
+		},
+		{ "toolCalls": [{ "name": "bash", "args": { "command": "ls" } }] },
+		{ "toolCalls": [{ "name": "bash", "args": { "command": "rm target.txt" }, "expectError": true }] },
+		{ "text": "Plan mode blocked the changes." }
+	]
+}

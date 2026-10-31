@@ -1,0 +1,5 @@
+{
+	"mode": "json",
+	"prompts": ["hi"],
+	"turns": [{ "text": "Hello from the scripted provider." }]
+}

@@ -1,0 +1,11 @@
+{
+	"mode": "json",
+	"files": { "fixture.txt": "first line of the fixture\nsecond line\n" },
+	"prompts": ["ask the scout about the fixture"],
+	"turns": [
+		{ "toolCalls": [{ "name": "subagent", "args": { "agent": "scout", "task": "Summarize fixture.txt" } }] },
+		{ "toolCalls": [{ "name": "read", "args": { "path": "fixture.txt" } }] },
+		{ "text": "fixture.txt has two lines." },
+		{ "text": "The scout reports that fixture.txt has two lines." }
+	]
+}

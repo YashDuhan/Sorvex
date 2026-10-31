@@ -1,0 +1,10 @@
+{
+	"mode": "json",
+	"args": ["--tools", "read"],
+	"files": { "fixture.txt": "first line of the fixture\nsecond line\n" },
+	"prompts": ["read the fixture"],
+	"turns": [
+		{ "toolCalls": [{ "name": "read", "args": { "path": "fixture.txt" } }] },
+		{ "text": "Read the fixture." }
+	]
+}

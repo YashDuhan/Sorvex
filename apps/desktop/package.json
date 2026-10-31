@@ -1,0 +1,38 @@
+{
+	"name": "@sorvex/desktop",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"description": "Experimental Tauri desktop GUI that drives Sorvex over RPC mode",
+	"scripts": {
+		"dev": "vite",
+		"server": "node --import ../../packages/coding-agent/src/experimental/source-resolver.ts server/index.ts",
+		"server:watch": "node --watch --import ../../packages/coding-agent/src/experimental/source-resolver.ts server/index.ts",
+		"build": "npm run check && vite build",
+		"check": "tsc --noEmit -p . && tsc -p tsconfig.server.json",
+		"tauri": "tauri",
+		"desktop:dev": "tauri dev",
+		"desktop:build": "tauri build"
+	},
+	"dependencies": {
+		"@tauri-apps/api": "2.12.4",
+		"@tauri-apps/plugin-dialog": "2.8.3",
+		"@xterm/addon-fit": "0.11.0",
+		"@xterm/xterm": "6.0.0",
+		"lucide-react": "1.61.0",
+		"playwright-core": "1.64.1",
+		"react": "19.3.1",
+		"react-dom": "19.3.1",
+		"react-icons": "5.7.0",
+		"react-markdown": "10.1.0",
+		"rehype-highlight": "7.0.2",
+		"remark-gfm": "4.0.1"
+	},
+	"devDependencies": {
+		"@tauri-apps/cli": "2.12.4",
+		"@types/react": "19.3.0",
+		"@types/react-dom": "19.3.0",
+		"@vitejs/plugin-react": "6.1.2",
+		"vite": "8.3.4"
+	}
+}

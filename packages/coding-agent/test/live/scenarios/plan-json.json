@@ -1,0 +1,8 @@
+{
+	"mode": "json",
+	"args": ["--plan"],
+	"prompts": ["plan it"],
+	"turns": [
+		{ "toolCalls": [{ "name": "exit_plan_mode", "args": { "plan": "1. Read the parser\n2. Split it into two modules" } }] }
+	]
+}

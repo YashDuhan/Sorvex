@@ -1,0 +1,102 @@
+[
+	{
+		"file": "packages/coding-agent/docs/extensions.md",
+		"line": "Session control methods on `pi`",
+		"reason": "api: `pi` is the ExtensionAPI parameter name"
+	},
+	{
+		"file": "packages/durable/README.md",
+		"line": "The kind must not start with `pi.`.",
+		"reason": "api: `pi.` is the reserved kind prefix the durable harness rejects"
+	},
+	{
+		"file": "packages/durable/docs/spec.md",
+		"line": "rejects a kind that is not a non-empty string or starts with `pi.`. Nothing in",
+		"reason": "api: `pi.` is the reserved kind prefix the durable harness rejects"
+	},
+	{
+		"file": "packages/durable/docs/spec.md",
+		"line": "- **Reserved `pi.` names:** task names, document kinds, and entry kinds starting",
+		"reason": "api: `pi.` is the reserved name prefix of durable built-ins"
+	},
+	{
+		"file": "packages/durable/docs/spec.md",
+		"line": "with `pi.` belong to built-ins by convention. Nothing enforces it; reusing one",
+		"reason": "api: `pi.` is the reserved name prefix of durable built-ins"
+	},
+	{
+		"file": "packages/telemetry/README.md",
+		"line": "The AI and Durable schemas use pi-owned `pi.ai.*` and `pi.durable.*` names.",
+		"reason": "api: the emitted telemetry names keep the `pi.` prefix"
+	},
+	{
+		"file": "packages/coding-agent/docs/containerization.md",
+		"line": "sbx run --kit \"docker.io/sbx/pi-kit:latest\" pi",
+		"reason": "third-party: the Docker Sandboxes kit is named pi and installs upstream pi"
+	},
+	{
+		"file": "packages/coding-agent/docs/containerization.md",
+		"line": "sbx exec <sandbox-name> -- pi -p",
+		"reason": "third-party: the Docker Sandboxes pi kit installs the upstream `pi` command"
+	},
+	{
+		"file": "packages/coding-agent/docs/containerization.md",
+		"line": "See the [Pi kit documentation]",
+		"reason": "third-party: names the Docker Sandboxes pi kit"
+	},
+	{
+		"file": "packages/coding-agent/docs/containerization.md",
+		"line": "openshell sandbox create --name pi-sandbox --from pi -- pi",
+		"reason": "third-party: the OpenShell community sandbox is named pi and runs upstream `pi`"
+	},
+	{
+		"file": "packages/coding-agent/examples/extensions/doom-overlay/README.md",
+		"line": "for the original pi integration",
+		"reason": "attribution: credits the upstream pi-doom project"
+	},
+	{
+		"file": "packages/coding-agent/examples/extensions/custom-header.ts",
+		"line": "showing the pi mascot",
+		"reason": "attribution: the example draws the upstream pi mascot"
+	},
+	{
+		"file": "packages/coding-agent/examples/extensions/custom-header.ts",
+		"line": "// Based on pi_mascot.ts - the pi agent character",
+		"reason": "attribution: the example draws the upstream pi mascot"
+	},
+	{
+		"file": "packages/coding-agent/docs/skills.md",
+		"line": "[Pi skills collection](https://github.com/badlogic/pi-skills)",
+		"reason": "third-party: names the upstream pi skills repository"
+	},
+	{
+		"file": "packages/coding-agent/docs/providers.md",
+		"line": "Radius is a service crafted for Pi by the builders of Pi, Earendil Works.",
+		"reason": "third-party: Earendil's description of its Radius service"
+	},
+	{
+		"file": "packages/coding-agent/docs/packages.md",
+		"line": "The `pi-package` keyword makes an npm package eligible for discovery in the [Pi package gallery](https://pi.dev/packages).",
+		"reason": "third-party: the package gallery on pi.dev is upstream's and indexes the `pi` manifest key"
+	},
+	{
+		"file": "packages/coding-agent/docs/packages.md",
+		"line": "Sorvex also reads a manifest under the `pi` key, so packages written for pi load unchanged.",
+		"reason": "compat: names the `pi` manifest key Sorvex still reads (decision D4)"
+	},
+	{
+		"file": "packages/coding-agent/docs/containerization.md",
+		"line": "The Docker Sandboxes kit and its `pi` command are upstream pi.",
+		"reason": "third-party: says the Docker Sandboxes kit installs upstream pi"
+	},
+	{
+		"file": "packages/coding-agent/docs/containerization.md",
+		"line": "The `pi` community sandbox runs upstream pi.",
+		"reason": "third-party: says the OpenShell community sandbox runs upstream pi"
+	},
+	{
+		"file": "README.md",
+		"line": "MIT. Sorvex is based on [pi](https://github.com/badlogic/pi-mono); see [LICENSE](LICENSE).",
+		"reason": "attribution: names the upstream project whose MIT license Sorvex keeps"
+	}
+]

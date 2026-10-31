@@ -1,0 +1,5 @@
+{
+	"mode": "json",
+	"prompts": ["fail please"],
+	"turns": [{ "error": "scripted provider failure" }]
+}

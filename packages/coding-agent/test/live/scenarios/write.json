@@ -1,0 +1,10 @@
+{
+	"mode": "json",
+	"args": ["--tools", "write"],
+	"expectFiles": { "created.txt": "written by the scripted model" },
+	"prompts": ["write the file"],
+	"turns": [
+		{ "toolCalls": [{ "name": "write", "args": { "path": "created.txt", "content": "written by the scripted model\n" } }] },
+		{ "text": "Wrote the file." }
+	]
+}

@@ -1,0 +1,18 @@
+{
+	"mode": "rpc",
+	"args": ["--plan"],
+	"files": { "target.txt": "old text\n" },
+	"expectFiles": { "target.txt": "new text" },
+	"prompts": ["plan the change, then make it"],
+	"uiAnswers": [{ "method": "select", "value": "Approve and start" }],
+	"turns": [
+		{ "toolCalls": [{ "name": "exit_plan_mode", "args": { "plan": "1. Replace old text with new text in target.txt" } }] },
+		{ "toolCalls": [{ "name": "todo", "args": { "action": "create", "subject": "Replace old text in target.txt" } }] },
+		{
+			"toolCalls": [
+				{ "name": "edit", "args": { "path": "target.txt", "edits": [{ "oldText": "old text", "newText": "new text" }] } }
+			]
+		},
+		{ "text": "Done." }
+	]
+}

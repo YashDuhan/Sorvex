@@ -1,0 +1,10 @@
+{
+	"mode": "print",
+	"args": ["--agent-mode", "security"],
+	"prompts": ["audit the repo"],
+	"turns": [
+		{ "toolCalls": [{ "name": "subagent", "args": { "agent": "auditor", "task": "Audit the repo" } }] },
+		{ "text": "No findings in the repo." },
+		{ "text": "The auditor found nothing." }
+	]
+}

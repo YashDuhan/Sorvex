@@ -1,0 +1,14 @@
+{
+	"mode": "json",
+	"args": ["--plan"],
+	"files": { "notes.txt": "keep\n", "a1": "x\nx\n", "a2": "keep\n" },
+	"expectFiles": { "notes.txt": "keep", "a1": "x\nx", "a2": "keep" },
+	"prompts": ["have a worker clean up, then plan"],
+	"turns": [
+		{ "toolCalls": [{ "name": "subagent", "args": { "agent": "worker", "task": "Clean up the directory" } }] },
+		{ "toolCalls": [{ "name": "bash", "args": { "command": "uniq a*" } }] },
+		{ "toolCalls": [{ "name": "bash", "args": { "command": "find -- . -delete" } }] },
+		{ "text": "Plan mode blocked both commands." },
+		{ "toolCalls": [{ "name": "exit_plan_mode", "args": { "plan": "1. Remove the duplicate files" } }] }
+	]
+}

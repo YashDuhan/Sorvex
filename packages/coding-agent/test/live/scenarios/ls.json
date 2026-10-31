@@ -1,0 +1,10 @@
+{
+	"mode": "json",
+	"args": ["--tools", "ls,read"],
+	"files": { "hello.txt": "hi", "notes.md": "# notes" },
+	"prompts": ["list the dir"],
+	"turns": [
+		{ "text": "Listing the directory.", "toolCalls": [{ "name": "ls", "args": { "path": "." } }] },
+		{ "text": "Done listing." }
+	]
+}

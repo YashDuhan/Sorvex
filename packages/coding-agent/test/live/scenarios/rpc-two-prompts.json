@@ -1,0 +1,5 @@
+{
+	"mode": "rpc",
+	"prompts": ["first prompt", "second prompt"],
+	"turns": [{ "text": "Reply to the first prompt." }, { "text": "Reply to the second prompt." }]
+}

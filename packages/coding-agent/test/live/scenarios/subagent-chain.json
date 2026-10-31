@@ -1,0 +1,24 @@
+{
+	"mode": "json",
+	"files": { "fixture.txt": "first line of the fixture\nsecond line\n" },
+	"prompts": ["scout the fixture, then plan a third line"],
+	"turns": [
+		{
+			"toolCalls": [
+				{
+					"name": "subagent",
+					"args": {
+						"chain": [
+							{ "agent": "scout", "task": "Summarize fixture.txt" },
+							{ "agent": "planner", "task": "Plan adding a third line. Scout findings: {previous}" }
+						]
+					}
+				}
+			]
+		},
+		{ "toolCalls": [{ "name": "read", "args": { "path": "fixture.txt" } }] },
+		{ "text": "fixture.txt has two lines." },
+		{ "text": "## Goal\nAppend a third line to fixture.txt." },
+		{ "text": "The planner suggests appending a third line." }
+	]
+}

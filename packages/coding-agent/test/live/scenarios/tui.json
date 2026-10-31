@@ -1,0 +1,17 @@
+{
+	"mode": "tui",
+	"cols": 80,
+	"rows": 30,
+	"turns": [{ "text": "Hello from the scripted TUI." }],
+	"steps": [
+		{ "type": "wait_for", "text": "ctrl+c" },
+		{ "type": "text", "text": "hi" },
+		{ "type": "key", "key": "enter" },
+		{ "type": "wait_for", "text": "Hello from the scripted TUI." },
+		{ "type": "resize", "cols": 100, "rows": 30 },
+		{ "type": "sleep", "ms": 500 },
+		{ "type": "key", "key": "ctrl+c" },
+		{ "type": "key", "key": "ctrl+c" },
+		{ "type": "expect_exit" }
+	]
+}

@@ -1,0 +1,15 @@
+{
+	"mode": "json",
+	"args": ["--tools", "read,edit"],
+	"files": { "target.txt": "old text\n" },
+	"expectFiles": { "target.txt": "new text" },
+	"prompts": ["edit the file"],
+	"turns": [
+		{
+			"toolCalls": [
+				{ "name": "edit", "args": { "path": "target.txt", "edits": [{ "oldText": "old text", "newText": "new text" }] } }
+			]
+		},
+		{ "text": "Edited the file." }
+	]
+}

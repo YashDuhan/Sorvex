@@ -1,0 +1,16 @@
+{
+	"mode": "rpc",
+	"files": { "target.txt": "old text\n" },
+	"expectFiles": { "target.txt": "new text" },
+	"args": ["--agent-mode", "security"],
+	"prompts": ["harden target.txt"],
+	"turns": [
+		{ "toolCalls": [{ "name": "read", "args": { "path": "target.txt" } }] },
+		{
+			"toolCalls": [
+				{ "name": "edit", "args": { "path": "target.txt", "edits": [{ "oldText": "old text", "newText": "new text" }] } }
+			]
+		},
+		{ "text": "Hardened." }
+	]
+}

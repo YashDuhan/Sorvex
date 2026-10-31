@@ -1,0 +1,9 @@
+{
+	"mode": "json",
+	"args": ["--tools", "bash"],
+	"prompts": ["run the command"],
+	"turns": [
+		{ "toolCalls": [{ "name": "bash", "args": { "command": "echo sorvex-lane" } }] },
+		{ "text": "Ran the command." }
+	]
+}
