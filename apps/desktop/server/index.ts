@@ -23,10 +23,13 @@ import { builtinAgents, changelog, deleteSession, exportJsonl, listFiles, listSe
 import { distDir, repoRoot, settingsPath } from "./paths.ts";
 import { type LocalSettings, LocalModels, llamaUrl } from "./local.ts";
 import { notify } from "./notify.ts";
+import { RemoteAccess } from "./remote.ts";
 import { DEFAULT_SETTINGS, readSettings, writeSettings } from "./settings.ts";
 import { type BrowserAction, BrowserManager, browserGuardrails } from "./browser.ts";
 import { DEFAULT_SSH_GUARDRAILS, type SshPolicy, SshManager, sshGuardrails } from "./ssh.ts";
 import { SideChats } from "./sidechat.ts";
+import { AndroidDevices, type DeviceAction } from "./devices.ts";
+import { type CommandInfo, listInstalledSkills, readSkillFile, removeSkill, SkillRegistry } from "./skills.ts";
 import { TerminalManager } from "./terminals.ts";
 import { type SpeechEndpoint, speak, transcribe } from "./voice.ts";
 import { changeSummary, type ChangedFile, currentBranch, fileDiff, listDir, readWorkspaceFile, searchFiles } from "./workspace.ts";
@@ -38,6 +41,7 @@ const hub = new Hub();
 const ssh = new SshManager(hub);
 // The browser tools share the SSH tools' per-launch token, which only the bridge extension holds.
 const browser = new BrowserManager(hub, ssh.token);
+const devices = new AndroidDevices(hub, ssh.token);
 // The agent's built-in llama.cpp provider talks to the local engine on the Local models page.
 const agent = new Agent(hub, { SORVEX_DESKTOP_URL: `http://${HOST}:${PORT}`, LLAMA_BASE_URL: process.env.LLAMA_BASE_URL ?? llamaUrl });
 const local = new LocalModels(hub);
@@ -85,6 +89,13 @@ async function reloadAgent(): Promise<void> {
 	if (agent.status === "ready") await agent.request({ type: "prompt", message: "/gui-reload" }).catch(() => undefined);
 }
 
+const skillRegistry = new SkillRegistry();
+/** The skills the running agent loaded; throws when it is not running, so the Skills page scans the folders instead. */
+async function installedSkillCommands() {
+	if (agent.status !== "ready") throw new Error("Agent not running");
+	return agent.request<{ commands: CommandInfo[] }>({ type: "get_commands" });
+}
+
 /** After credentials change, the agent's cached model list must be rebuilt before the UI asks for it. */
 function refreshAgentModels(): void {
 	if (agent.status !== "ready") return;
@@ -121,7 +132,7 @@ const routes: Record<string, Handler> = {
 		terminals.close(Number(body.id));
 		return { ok: true };
 	},
-	"GET /api/state": () => ({ agent: agent.snapshot(), defaultCwd: process.env.SORVEX_DESKTOP_CWD ?? repoRoot }),
+	"GET /api/state": () => ({ agent: agent.snapshot(), defaultCwd: process.env.SORVEX_DESKTOP_CWD ?? repoRoot, dialogs: agent.pendingDialogs() }),
 
 	"POST /api/agent/cwd": (body) => {
 		agent.setCwd(String(body.cwd));
@@ -224,6 +235,32 @@ const routes: Record<string, Handler> = {
 		data: await agent.request({ type: "prompt", message: `/mcp ${String(body.action)} ${String(body.name ?? "")}`.trim() }),
 	}),
 
+	"GET /api/skills": (_body, url) => listInstalledSkills(url.searchParams.get("cwd") || agent.cwd || repoRoot, installedSkillCommands),
+	"GET /api/skills/file": async (_body, url) => {
+		const cwd = url.searchParams.get("cwd") || agent.cwd || repoRoot;
+		const { skills } = await listInstalledSkills(cwd, installedSkillCommands);
+		return readSkillFile(cwd, String(url.searchParams.get("path")), skills.map((skill) => skill.path));
+	},
+	"POST /api/skills/remove": async (body) => {
+		const result = removeSkill(String(body.cwd || agent.cwd || repoRoot), String(body.path));
+		await reloadAgent();
+		return result;
+	},
+	"GET /api/skills/registry": (_body, url) =>
+		skillRegistry.browse({
+			query: url.searchParams.get("q") ?? "",
+			sources: url.searchParams.getAll("source"),
+			page: Number(url.searchParams.get("page") ?? 1),
+			pageSize: Number(url.searchParams.get("pageSize") ?? 25),
+			force: url.searchParams.get("refresh") === "1",
+		}),
+	"GET /api/skills/registry/detail": (_body, url) => skillRegistry.detail(String(url.searchParams.get("id"))),
+	"POST /api/skills/registry/install": async (body) => {
+		const result = await skillRegistry.install(String(body.id), String(body.cwd || agent.cwd || repoRoot), body.scope === "project" ? "project" : "user");
+		await reloadAgent();
+		return result;
+	},
+
 	// PDF attachments: the UI sends the file, the agent gets its text. Uses poppler's pdftotext.
 	"POST /api/extract-pdf": (body) =>
 		new Promise((resolve, reject) => {
@@ -298,6 +335,39 @@ const routes: Record<string, Handler> = {
 	},
 	// Used only by the bridge extension's browser tools; `act` also requires the per-launch token.
 	"POST /api/browser/agent/check": (body) => browser.check(body.input as BrowserAction),
+	"GET /api/device/status": () => devices.status(),
+	"POST /api/device/setup": (body) => devices.installSdk(body.acceptLicense === true),
+	"POST /api/device/hub/start": async () => {
+		await devices.startHub();
+		return devices.status();
+	},
+	"POST /api/device/hub/restart": async () => {
+		devices.stopHub();
+		await devices.startHub();
+		return devices.status();
+	},
+	"POST /api/device/boot": (body) => devices.boot(String(body.avd)),
+	"POST /api/device/shutdown": async (body) => {
+		await devices.shutdown(String(body.serial));
+		return { ok: true };
+	},
+	"GET /api/device/list": () => devices.devices(),
+	"GET /api/device/new-options": () => devices.newDeviceOptions(),
+	"GET /api/device/latest-image": async () => ({ image: await devices.latestImage() }),
+	"POST /api/device/install-image": (body) => devices.installImage(String(body.image), body.acceptLicense === true),
+	"POST /api/device/create": (body) => devices.createAndBoot(String(body.name), String(body.image), String(body.profile ?? "")),
+	"POST /api/device/rotate": async (body) => {
+		await devices.rotate(String(body.serial));
+		return { ok: true };
+	},
+	"POST /api/device/hub": (body) =>
+		devices.hubProxy(body.method === "GET" ? "GET" : "POST", String(body.path), String(body.serial), body.body),
+	"POST /api/device/inspect": (body) => devices.inspect(String(body.serial), Number(body.x), Number(body.y), body.full === true),
+	"POST /api/device/metrics/watch": (body) => {
+		devices.watchMetrics(String(body.serial));
+		return { ok: true };
+	},
+	"POST /api/device/agent/act": (body) => devices.agentAct(String(body.token), body.input as DeviceAction),
 	"POST /api/browser/agent/act": (body) => browser.agentAct(String(body.token), body.input as BrowserAction, body.approved === true),
 
 	"GET /api/kokoro": () => kokoro.status(),
@@ -388,10 +458,33 @@ const routes: Record<string, Handler> = {
 		notify(String(body.title ?? "Sorvex").slice(0, 120), String(body.body ?? "").slice(0, 300));
 		return { ok: true };
 	},
+	// Remote access (server/remote.ts). Phones cannot call these: they are not in its route allowlist.
+	"GET /api/remote": () => remote.status(),
+	"PUT /api/remote": (body) => remote.configure(body),
+	"POST /api/remote/pair/start": () => remote.startPairing(),
+	"POST /api/remote/pair/stop": () => remote.stopPairing(),
+	"POST /api/remote/pair/answer": (body) => remote.answerPairing(String(body.id), body.allow === true),
+	"POST /api/remote/revoke": (body) => remote.revoke(String(body.id)),
+	"POST /api/remote/revoke-all": () => remote.revokeAll(),
 	"POST /api/review": async (body) => ({
 		text: await credentials.complete(String(body.model), String(body.systemPrompt), String(body.content)),
 	}),
 };
+
+/** Runs one route. Used by the HTTP server and by paired phones (through remote access's allowlist). */
+async function dispatch(method: string, url: URL, body: Record<string, unknown>): Promise<unknown> {
+	const handler = routes[`${method} ${url.pathname}`];
+	if (!handler) throw new HttpError(404, `No route ${method} ${url.pathname}`);
+	return (await handler(body, url)) ?? { ok: true };
+}
+
+const remote = new RemoteAccess(hub, async (method, path, body) => {
+	try {
+		return { status: 200, body: await dispatch(method, new URL(path, `http://${HOST}`), body) };
+	} catch (error) {
+		return { status: error instanceof HttpError ? error.status : 500, body: { error: error instanceof Error ? error.message : String(error) } };
+	}
+});
 
 const MIME: Record<string, string> = {
 	".html": "text/html; charset=utf-8",
@@ -430,10 +523,8 @@ const server = createServer(async (request, response) => {
 			return;
 		}
 		if (request.method !== "GET" && request.headers["x-sorvex-desktop"] !== "1") throw new HttpError(403, "Missing header");
-		const handler = routes[`${request.method} ${url.pathname}`];
-		if (!handler) throw new HttpError(404, `No route ${request.method} ${url.pathname}`);
-		const body = request.method === "GET" ? {} : await readBody(request);
-		send(response, 200, (await handler(body, url)) ?? { ok: true });
+		const method = request.method ?? "GET";
+		send(response, 200, await dispatch(method, url, method === "GET" ? {} : await readBody(request)));
 	} catch (error) {
 		send(response, error instanceof HttpError ? error.status : 500, {
 			error: error instanceof Error ? error.message : String(error),
@@ -449,11 +540,13 @@ process.on("unhandledRejection", (error) => {
 });
 
 function shutdown(): void {
+	remote.stop();
 	void browser.close();
 	local.stop();
 	terminals.closeAll();
 	agent.stop();
 	kokoro.stop();
+	devices.stopHub();
 	process.exit(0);
 }
 process.on("SIGINT", shutdown);

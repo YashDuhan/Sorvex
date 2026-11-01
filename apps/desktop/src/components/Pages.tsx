@@ -5,6 +5,7 @@ import type { DesktopSettings, SpeechEndpoint, VoiceSettings } from "../settings
 import type { SorvexActions, State } from "../store.ts";
 import { Mic as Microphone } from "../voice.ts";
 import { Select } from "./Select.tsx";
+import { RemoteSection } from "./Remote.tsx";
 import { VoiceWaveform } from "./Waveforms.tsx";
 
 export type Theme = "dark" | "light" | "system";
@@ -35,7 +36,7 @@ export function Switch({ on, onChange, label, disabled }: { on: boolean; onChang
 	);
 }
 
-function TextField({ value, onChange, placeholder, width = 220 }: { value: string; onChange: (value: string) => void; placeholder?: string; width?: number }) {
+export function TextField({ value, onChange, placeholder, width = 220 }: { value: string; onChange: (value: string) => void; placeholder?: string; width?: number }) {
 	const [draft, setDraft] = useState(value);
 	useEffect(() => setDraft(value), [value]);
 	return (
@@ -355,6 +356,7 @@ export function SettingsPage({
 					</Setting>
 				</section>
 				<SorvexSettingsSection state={state} actions={actions} />
+				<RemoteSection toast={actions.toast} />
 				{settings && <VoiceSection settings={settings} actions={actions} onChange={(voice) => void actions.saveSettings({ ...settings, voice })} />}
 				{settings && (
 					<section className="card">

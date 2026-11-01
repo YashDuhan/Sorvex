@@ -13,19 +13,17 @@ import {
 import { FaShieldAlt } from "react-icons/fa";
 import { ImAttachment } from "react-icons/im";
 import { RiVoiceprintLine } from "react-icons/ri";
-import { TiFlowSwitch } from "react-icons/ti";
 import { api } from "../api.ts";
 import { allCommands, parseBuiltin } from "../commands.ts";
 import { switchToLocalModel } from "../local.ts";
 import { onComposerAttach } from "../composerInbox.ts";
 import { compactNumber } from "../format.ts";
-import type { ThinkingLevel } from "../rpc.ts";
 import type { Permission, SpeechEndpoint } from "../settings.ts";
 import { type Attachment, type SorvexActions, currentMode, type Mode, type State } from "../store.ts";
 import { speaker } from "../voice.ts";
 import { AgentMonitor, collectRuns } from "./AgentMonitor.tsx";
 import { ElementChip } from "./ElementChip.tsx";
-import { ModelPicker } from "./ModelPicker.tsx";
+import { ModelPicker, ProviderIcon } from "./ModelPicker.tsx";
 import { FlameWaveform, VoiceWaveform } from "./Waveforms.tsx";
 
 /** A trigger with a menu that opens above it and closes on outside click or Escape. */
@@ -68,7 +66,7 @@ function Dropdown({
 }
 
 const MODES: { mode: Mode; label: string; color?: string }[] = [
-	{ mode: "build", label: "Build", color: "var(--accent-blue)" },
+	{ mode: "build", label: "Build" },
 	{ mode: "plan", label: "Plan", color: "var(--mode-plan)" },
 	{ mode: "security", label: "Security", color: "var(--mode-security)" },
 ];
@@ -89,7 +87,6 @@ function ModeTabs({ mode, onMode, disabled }: { mode: Mode; onMode: (mode: Mode)
 						style={active && entry.color ? ({ "--tab-color": entry.color } as CSSProperties) : undefined}
 						onClick={() => !active && onMode(entry.mode)}
 					>
-						<TiFlowSwitch size={14} className="mode-icon" />
 						{entry.label}
 					</button>
 				);
@@ -260,31 +257,20 @@ function GuardrailBadge({ state, actions, onOpen }: { state: State; actions: Sor
 	);
 }
 
-const EFFORT_COLOR: Partial<Record<ThinkingLevel, string>> = {
-	minimal: "var(--accent-green)",
-	low: "var(--accent-green)",
-	medium: "var(--accent-yellow-strong)",
-	high: "var(--accent-red)",
-	xhigh: "var(--accent-red)",
-	max: "var(--accent-red)",
-};
-
 /** "Effort <level>"; each click moves to the next thinking level the model supports. */
 function EffortPill({ state, actions }: { state: State; actions: SorvexActions }) {
 	const level = state.session?.thinkingLevel;
 	const levels = state.thinkingLevels;
 	if (!state.session?.model?.reasoning || !level || levels.length === 0) return null;
-	const color = EFFORT_COLOR[level];
 	const next = levels[(levels.indexOf(level) + 1) % levels.length]!;
 	return (
 		<button
 			type="button"
 			className="comp-pill"
-			style={color ? { color, borderColor: color } : undefined}
 			title={`Thinking effort: ${level}. Click for ${next}.`}
 			onClick={() => void actions.setThinking(next)}
 		>
-			Effort {level}
+			<span className="comp-pill-label">Effort</span> {level}
 		</button>
 	);
 }
@@ -393,7 +379,7 @@ function VoiceDropdown({ state, actions }: { state: State; actions: SorvexAction
 			width={220}
 			trigger={(_open, toggle) => (
 				<button type="button" className="voice-select" onClick={toggle} title="Voice settings" aria-label="Voice settings">
-					{ready ? <Mic size={14} color="var(--accent-green-icon)" /> : <MicOff size={14} color="var(--text-muted)" />}
+					{ready ? <Mic size={14} /> : <MicOff size={14} color="var(--text-faint)" />}
 					<ChevronDown size={12} style={{ opacity: 0.4 }} />
 				</button>
 			)}
@@ -428,14 +414,13 @@ function VoiceDropdown({ state, actions }: { state: State; actions: SorvexAction
 
 function ModelSelect({ state, actions, onSetupLocal }: { state: State; actions: SorvexActions; onSetupLocal: () => void }) {
 	const current = state.session?.model;
-	const dot = state.connection !== "ready" ? "var(--text-disabled)" : state.isStreaming ? "var(--accent-yellow-strong)" : "var(--accent-green-icon)";
 	return (
 		<Dropdown
 			align="right"
-			width={380}
+			width={460}
 			trigger={(_open, toggle) => (
 				<button type="button" className={`model-select${state.isStreaming ? " busy" : ""}`} onClick={toggle} title={current ? `${current.provider}/${current.id}` : "Choose a model"}>
-					<span className="status-dot" style={{ background: dot }} />
+					{current ? <ProviderIcon provider={current.provider} size={13} /> : <span className="status-dot" style={{ background: "var(--text-disabled)" }} />}
 					<span className={current ? "name" : "name placeholder"}>{current ? current.name || current.id : "Select"}</span>
 					<ChevronDown size={12} style={{ opacity: 0.4 }} />
 				</button>
@@ -778,8 +763,6 @@ export function Composer({
 
 	const modeColor = MODES.find((entry) => entry.mode === mode)?.color;
 	const bashMode = text.startsWith("!");
-	// An empty, idle prompt box shows a slow sweep in the mode colour; typing (or any other state) replaces it.
-	const idle = ready && !text && attachments.length === 0;
 	const borderState = bashMode
 		? " bash-mode"
 		: voice.dictating
@@ -788,9 +771,7 @@ export function Composer({
 				? " voice-chat"
 				: state.isStreaming
 					? " running"
-					: idle
-						? " idle"
-						: "";
+					: "";
 	const canSend = ready && Boolean(text.trim() || attachments.length > 0 || state.annotations.length > 0);
 
 	return (
@@ -798,7 +779,7 @@ export function Composer({
 			<AgentMonitor state={state} actions={actions} open={monitorOpen} onClose={() => setMonitorOpen(false)} />
 			{!monitorOpen && activeAgents > 0 && (
 				<button type="button" className="monitor-mini" onClick={() => setMonitorOpen(true)}>
-					<Loader2 size={12} className="spin" />
+					<span className="monitor-mini-dot" />
 					{activeAgents} agent{activeAgents === 1 ? "" : "s"} running
 				</button>
 			)}

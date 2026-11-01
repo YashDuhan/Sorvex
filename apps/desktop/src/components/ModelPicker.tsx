@@ -1,34 +1,105 @@
-import { Clock, Cpu, Loader2, Play, Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Check, Clock, Cpu, Loader2, Play, Search, Star } from "lucide-react";
+import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import type { IconType } from "react-icons";
+import { RiAmazonFill, RiCopilotFill, RiMicrosoftFill, RiOpenaiFill } from "react-icons/ri";
+import {
+	SiAlibabacloud,
+	SiAnthropic,
+	SiCloudflare,
+	SiDeepseek,
+	SiGooglegemini,
+	SiHuggingface,
+	SiMeta,
+	SiMinimax,
+	SiMistralai,
+	SiNvidia,
+	SiOllama,
+	SiOpencode,
+	SiOpenrouter,
+	SiPerplexity,
+	SiQwen,
+	SiVercel,
+	SiX,
+} from "react-icons/si";
 import { api } from "../api.ts";
 import { compactNumber } from "../format.ts";
 import { CHAT_ONLY_HINT, LOCAL_PROVIDER, type LocalModel, localModelName } from "../local.ts";
 import type { Model } from "../rpc.ts";
 
 const RECENT_KEY = "recentModels";
-/** The tab for models on this device; it replaces the raw "llama.cpp" provider tab. */
+const FAVORITES_KEY = "favoriteModels";
+/** Rail entries that are not providers. */
+const FAVORITES_TAB = "★";
 const LOCAL_TAB = "Local";
 
-export function readRecentModels(): string[] {
+const modelKey = (model: Pick<Model, "provider" | "id">) => `${model.provider}/${model.id}`;
+
+function readList(key: string): string[] {
 	try {
-		return JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]") as string[];
+		return JSON.parse(localStorage.getItem(key) ?? "[]") as string[];
 	} catch {
 		return [];
 	}
 }
 
-export function rememberModel(model: Model): void {
-	const id = `${model.provider}/${model.id}`;
+function writeList(key: string, list: string[]): void {
 	try {
-		localStorage.setItem(RECENT_KEY, JSON.stringify([id, ...readRecentModels().filter((entry) => entry !== id)].slice(0, 6)));
+		localStorage.setItem(key, JSON.stringify(list));
 	} catch {
-		// Recents just will not persist.
+		// Not persisted; the list still works for this session.
 	}
+}
+
+export function readRecentModels(): string[] {
+	return readList(RECENT_KEY);
+}
+
+export function rememberModel(model: Model): void {
+	const id = modelKey(model);
+	writeList(RECENT_KEY, [id, ...readRecentModels().filter((entry) => entry !== id)].slice(0, 6));
+}
+
+/** Brand marks by provider id prefix; anything else gets its initial. */
+const PROVIDER_ICONS: [RegExp, IconType][] = [
+	[/^anthropic/, SiAnthropic],
+	[/^azure/, RiMicrosoftFill],
+	[/^openai/, RiOpenaiFill],
+	[/^(google|gemini)/, SiGooglegemini],
+	[/^github-copilot/, RiCopilotFill],
+	[/^amazon/, RiAmazonFill],
+	[/^mistral/, SiMistralai],
+	[/^deepseek/, SiDeepseek],
+	[/^huggingface/, SiHuggingface],
+	[/^meta/, SiMeta],
+	[/^nvidia/, SiNvidia],
+	[/^openrouter/, SiOpenrouter],
+	[/^minimax/, SiMinimax],
+	[/^qwen/, SiQwen],
+	[/^alibaba/, SiAlibabacloud],
+	[/^cloudflare/, SiCloudflare],
+	[/^vercel/, SiVercel],
+	[/^xai/, SiX],
+	[/^opencode/, SiOpencode],
+	[/^perplexity/, SiPerplexity],
+	[/^ollama/, SiOllama],
+];
+
+export function ProviderIcon({ provider, size = 16 }: { provider: string; size?: number }) {
+	if (provider === LOCAL_PROVIDER || provider === LOCAL_TAB) return <Cpu size={size} />;
+	const Icon = PROVIDER_ICONS.find(([pattern]) => pattern.test(provider))?.[1];
+	if (Icon) return <Icon size={size} />;
+	return (
+		<span className="mp-monogram" style={{ width: size, height: size, fontSize: Math.round(size * 0.62) }}>
+			{provider.charAt(0).toUpperCase()}
+		</span>
+	);
 }
 
 function size(bytes?: number): string {
 	return bytes ? `${(bytes / 1e9).toFixed(1)} GB` : "";
 }
+
+const isMac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
 
 /** What the Local tab needs from its host: switching to a local model, and opening the Local models page. */
 export interface LocalPickerOptions {
@@ -37,9 +108,9 @@ export interface LocalPickerOptions {
 }
 
 /**
- * Provider-first model list: a provider strip on top (with model counts), recently used models first, then
- * the chosen provider's models. Typing searches every provider. With `local`, a Local tab lists every model
- * downloaded to this device (not only the loaded one); picking one loads it and switches to it.
+ * Provider rail on the left (favorites first, then each provider with credentials, then models on this device),
+ * a search box, and the chosen provider's models. Typing searches every provider. Star a model to pin it to
+ * favorites; Ctrl+1 to Ctrl+9 pick the first nine rows, the arrow keys and Enter move through the list.
  */
 export function ModelPicker({
 	models,
@@ -55,11 +126,15 @@ export function ModelPicker({
 	local?: LocalPickerOptions;
 }) {
 	const [query, setQuery] = useState(initialQuery);
+	const [favorites, setFavorites] = useState<string[]>(() => readList(FAVORITES_KEY));
 	const cloud = useMemo(() => (local ? models.filter((model) => model.provider !== LOCAL_PROVIDER) : models), [models, local]);
 	const [engine, setEngine] = useState<{ installed: boolean; running: boolean } | null>(null);
 	const [localModels, setLocalModels] = useState<LocalModel[]>([]);
 	const [loading, setLoading] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const [highlight, setHighlight] = useState(0);
+	const searchRef = useRef<HTMLInputElement>(null);
+	const listRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
 		if (!local) return;
@@ -74,25 +149,41 @@ export function ModelPicker({
 	const providers = useMemo(() => {
 		const counts = new Map<string, number>();
 		for (const model of cloud) counts.set(model.provider, (counts.get(model.provider) ?? 0) + 1);
-		const list = [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-		return local ? [...list, [LOCAL_TAB, ready.length] as [string, number]] : list;
-	}, [cloud, local, ready.length]);
-	const [provider, setProvider] = useState<string>(() => (current?.provider === LOCAL_PROVIDER && local ? LOCAL_TAB : (current?.provider ?? providers[0]?.[0] ?? "")));
-
-	const recent = useMemo(
-		() =>
-			readRecentModels()
-				.map((id) => models.find((model) => `${model.provider}/${model.id}` === id))
-				.filter((model): model is Model => model !== undefined),
-		[models],
-	);
+		return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+	}, [cloud]);
+	const favoriteModels = useMemo(() => favorites.map((id) => models.find((model) => modelKey(model) === id)).filter((model): model is Model => model !== undefined), [favorites, models]);
+	const recent = useMemo(() => readRecentModels().map((id) => models.find((model) => modelKey(model) === id)).filter((model): model is Model => model !== undefined), [models]);
+	const [tab, setTab] = useState<string>(() => {
+		if (favoriteModels.length > 0) return FAVORITES_TAB;
+		if (current?.provider === LOCAL_PROVIDER && local) return LOCAL_TAB;
+		return current?.provider ?? providers[0]?.[0] ?? FAVORITES_TAB;
+	});
 
 	const needle = query.trim().toLowerCase();
-	const list = needle
+	const showRecent = !needle && tab === FAVORITES_TAB && favoriteModels.length === 0;
+	const list: Model[] = needle
 		? cloud.filter((model) => `${model.provider}/${model.id} ${model.name}`.toLowerCase().includes(needle))
-		: cloud.filter((model) => model.provider === provider);
+		: tab === FAVORITES_TAB
+			? favoriteModels.length > 0
+				? favoriteModels
+				: recent
+			: tab === LOCAL_TAB
+				? []
+				: cloud.filter((model) => model.provider === tab);
 	const localList = needle ? ready.filter((model) => model.id.toLowerCase().includes(needle)) : ready;
-	const showLocal = Boolean(local) && (needle ? localList.length > 0 : provider === LOCAL_TAB);
+	const showLocal = Boolean(local) && (needle ? localList.length > 0 : tab === LOCAL_TAB);
+
+	useEffect(() => setHighlight(0), [needle, tab]);
+	useEffect(() => {
+		listRef.current?.querySelector(`[data-row="${highlight}"]`)?.scrollIntoView({ block: "nearest" });
+	}, [highlight]);
+
+	const toggleFavorite = (model: Model) => {
+		const id = modelKey(model);
+		const next = favorites.includes(id) ? favorites.filter((entry) => entry !== id) : [...favorites, id];
+		setFavorites(next);
+		writeList(FAVORITES_KEY, next);
+	};
 
 	const pickLocal = async (id: string) => {
 		if (!local || loading) return;
@@ -107,19 +198,67 @@ export function ModelPicker({
 		}
 	};
 
-	const row = (model: Model, showProvider: boolean) => {
+	const onKeyDown = (event: KeyboardEvent) => {
+		const digit = /^Digit([1-9])$/.exec(event.code)?.[1];
+		if (digit && (isMac ? event.metaKey : event.ctrlKey)) {
+			const model = list[Number(digit) - 1];
+			if (model) {
+				event.preventDefault();
+				onPick(model);
+			}
+			return;
+		}
+		if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+			event.preventDefault();
+			if (list.length === 0) return;
+			setHighlight((index) => (index + (event.key === "ArrowDown" ? 1 : list.length - 1)) % list.length);
+		} else if (event.key === "Enter" && list[highlight]) {
+			event.preventDefault();
+			onPick(list[highlight]);
+		}
+	};
+
+	const row = (model: Model, index: number) => {
 		const active = current?.provider === model.provider && current.id === model.id;
+		const favorite = favorites.includes(modelKey(model));
+		const providerName = model.provider === LOCAL_PROVIDER ? "local" : model.provider;
+		const detail = [providerName, `${compactNumber(model.contextWindow)} ctx`, model.reasoning ? "reasoning" : "", model.input?.includes("image") ? "images" : ""].filter(Boolean).join(" · ");
 		return (
-			<button key={`${model.provider}/${model.id}`} type="button" className={`menu-item${active ? " selected" : ""}`} onClick={() => onPick(model)}>
-				<span className="stack">
-					<span>{model.name || model.id}</span>
-					<small>
-						{showProvider ? `${model.provider === LOCAL_PROVIDER ? "local" : model.provider} · ` : ""}
-						{model.id} · {compactNumber(model.contextWindow)} ctx{model.reasoning ? " · reasoning" : ""}
-						{model.input?.includes("image") ? " · images" : ""}
-					</small>
+			// biome-ignore lint/a11y/useSemanticElements: a row that holds its own favorite button cannot be a <button>.
+			<div
+				key={modelKey(model)}
+				data-row={index}
+				role="option"
+				tabIndex={-1}
+				aria-selected={active}
+				className={`mp-row${index === highlight ? " highlight" : ""}${active ? " active" : ""}`}
+				onMouseEnter={() => setHighlight(index)}
+				onClick={() => onPick(model)}
+				onKeyDown={(event) => event.key === "Enter" && onPick(model)}
+			>
+				<span className="mp-row-icon">
+					<ProviderIcon provider={model.provider} size={14} />
 				</span>
-			</button>
+				<span className="mp-row-text">
+					<span className="mp-row-name">{model.name || model.id}</span>
+					<small>{detail}</small>
+				</span>
+				{active && <Check size={13} className="mp-row-check" />}
+				{index < 9 && <kbd className="mp-kbd">{isMac ? "⌘" : "Ctrl+"}{index + 1}</kbd>}
+				<button
+					type="button"
+					className={`mp-star${favorite ? " on" : ""}`}
+					aria-label={favorite ? `Remove ${model.name || model.id} from favorites` : `Add ${model.name || model.id} to favorites`}
+					title={favorite ? "Remove from favorites" : "Add to favorites"}
+					onClick={(event) => {
+						event.stopPropagation();
+						toggleFavorite(model);
+						searchRef.current?.focus();
+					}}
+				>
+					<Star size={12} fill={favorite ? "currentColor" : "none"} />
+				</button>
+			</div>
 		);
 	};
 
@@ -130,13 +269,16 @@ export function ModelPicker({
 			<button
 				key={`local/${model.id}`}
 				type="button"
-				className={`menu-item${active ? " selected" : ""}`}
+				className={`mp-row${active ? " active" : ""}`}
 				title={model.tools === false ? CHAT_ONLY_HINT : undefined}
 				disabled={Boolean(loading)}
 				onClick={() => void pickLocal(model.id)}
 			>
-				<span className="stack">
-					<span>{localModelName(model.id)}</span>
+				<span className="mp-row-icon">
+					<Cpu size={14} />
+				</span>
+				<span className="mp-row-text">
+					<span className="mp-row-name">{localModelName(model.id)}</span>
 					<small>
 						{busy
 							? "Loading on this device…"
@@ -145,12 +287,12 @@ export function ModelPicker({
 									.join(" · ")}
 					</small>
 				</span>
-				{busy && <Loader2 size={14} className="spin" />}
+				{busy ? <Loader2 size={13} className="spin" /> : active ? <Check size={13} className="mp-row-check" /> : null}
 			</button>
 		);
 	};
 
-	const localSection = () => {
+	const localSection = (): ReactNode => {
 		if (!engine) {
 			return (
 				<div className="empty-note">
@@ -200,7 +342,7 @@ export function ModelPicker({
 				{localList.map(localRow)}
 				{localList.length === 0 && <div className="empty-note">No models downloaded yet.</div>}
 				{local?.onSetup && (
-					<button type="button" className="menu-item picker-local-manage" onClick={local.onSetup}>
+					<button type="button" className="mp-row mp-manage" onClick={local.onSetup}>
 						Download or manage local models…
 					</button>
 				)}
@@ -210,51 +352,58 @@ export function ModelPicker({
 
 	if (models.length === 0 && !local) return <div className="empty-note">No models with credentials. Add a provider on the Providers page.</div>;
 
+	const railItem = (id: string, label: string, icon: ReactNode) => (
+		<button
+			key={id}
+			type="button"
+			role="tab"
+			aria-selected={!needle && tab === id}
+			aria-label={label}
+			title={label}
+			className={`mp-rail-item${!needle && tab === id ? " on" : ""}`}
+			onClick={() => {
+				setTab(id);
+				setQuery("");
+				searchRef.current?.focus();
+			}}
+		>
+			{icon}
+		</button>
+	);
+	const scope = needle ? "all providers" : tab === FAVORITES_TAB ? "favorites" : tab === LOCAL_TAB ? "this device" : tab;
+
 	return (
-		<div className="model-picker">
-			<div className="popover-search">
-				<Search size={13} />
-				<input autoFocus placeholder="Search all models" value={query} onChange={(event) => setQuery(event.target.value)} />
-			</div>
-			{!needle && (
-				<div className="provider-tabs" role="tablist" aria-label="Providers">
-					{providers.map(([name, count]) => (
-						<button
-							key={name}
-							type="button"
-							role="tab"
-							aria-selected={name === provider}
-							className={`provider-tab${name === provider ? " on" : ""}`}
-							onClick={() => setProvider(name)}
-						>
-							{name === LOCAL_TAB && <Cpu size={11} />}
-							{name}
-							<span>{count}</span>
-						</button>
-					))}
-				</div>
-			)}
-			<div className="model-picker-list">
-				{error && <div className="picker-local-error">{error}</div>}
-				{!needle && recent.length > 0 && (
-					<>
-						<div className="popover-group">
-							<Clock size={11} /> Recent
+		// biome-ignore lint/a11y/noStaticElementInteractions: keyboard shortcuts for the whole picker; the search box keeps focus.
+		<div className="model-picker" onKeyDown={onKeyDown}>
+			<nav className="mp-rail" role="tablist" aria-label="Providers" aria-orientation="vertical">
+				{railItem(FAVORITES_TAB, "Favorites", <Star size={16} fill="currentColor" />)}
+				<div className="mp-rail-sep" />
+				{providers.map(([name, count]) => railItem(name, `${name} · ${count} model${count === 1 ? "" : "s"}`, <ProviderIcon provider={name} />))}
+				{local && railItem(LOCAL_TAB, `On this device · ${ready.length}`, <Cpu size={16} />)}
+			</nav>
+			<div className="mp-main">
+				<label className="mp-search">
+					<Search size={13} />
+					<input ref={searchRef} autoFocus placeholder="Search models" value={query} onChange={(event) => setQuery(event.target.value)} />
+				</label>
+				<div className="mp-list" ref={listRef} role="listbox" aria-label={`Models in ${scope}`}>
+					{error && <div className="picker-local-error">{error}</div>}
+					{showRecent && list.length > 0 && (
+						<div className="mp-group">
+							<Clock size={11} /> Recent. Star a model to keep it here.
 						</div>
-						{recent.map((model) => row(model, true))}
-						<div className="menu-divider" />
-						<div className="popover-group">{provider === LOCAL_TAB ? "On this device" : provider}</div>
-					</>
-				)}
-				{(needle || provider !== LOCAL_TAB) && list.map((model) => row(model, Boolean(needle)))}
-				{showLocal && (
-					<>
-						{needle && <div className="popover-group">On this device</div>}
-						{needle ? localList.map(localRow) : localSection()}
-					</>
-				)}
-				{needle && list.length === 0 && localList.length === 0 && <div className="empty-note">No models match</div>}
-				{!needle && provider !== LOCAL_TAB && list.length === 0 && <div className="empty-note">No models match</div>}
+					)}
+					{list.map(row)}
+					{showLocal && (
+						<>
+							{needle && <div className="mp-group">On this device</div>}
+							{needle ? localList.map(localRow) : localSection()}
+						</>
+					)}
+					{list.length === 0 && !showLocal && (
+						<div className="empty-note">{needle ? "No models match" : tab === FAVORITES_TAB ? "Star models to pin them here" : "No models"}</div>
+					)}
+				</div>
 			</div>
 		</div>
 	);

@@ -1,6 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { Diff, Folder, Globe, Plus, RotateCw, SquareTerminal } from "lucide-react";
+import { Diff, Folder, Globe, Plus, RotateCw, Smartphone, SquareTerminal } from "lucide-react";
 import { VscLayoutSidebarLeft, VscLayoutSidebarLeftOff, VscLayoutSidebarRight, VscLayoutSidebarRightOff } from "react-icons/vsc";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Composer } from "./components/Composer.tsx";
@@ -10,6 +10,7 @@ import { DownloadsTray } from "./components/DownloadsTray.tsx";
 import { ExtensionDialog, Toasts } from "./components/Overlays.tsx";
 import { AboutPage, LogsPage, SettingsPage, type Theme } from "./components/Pages.tsx";
 import { BrowserPane } from "./components/BrowserPane.tsx";
+import { DevicePane } from "./components/DevicePane.tsx";
 import { ChangesPane } from "./components/ChangesPane.tsx";
 import { ContextChips } from "./components/ContextChips.tsx";
 import { FilesPane } from "./components/FilesPane.tsx";
@@ -17,6 +18,7 @@ import { SideChatPane } from "./components/SideChatPane.tsx";
 import { TerminalPane } from "./components/TerminalPane.tsx";
 import { LocalModelsPage } from "./components/LocalModels.tsx";
 import { McpPage } from "./components/Mcp.tsx";
+import { SkillsPage } from "./components/Skills.tsx";
 import { type ModalKind, Modals, shouldShowLocalNotice } from "./components/Modals.tsx";
 import { ProvidersPage } from "./components/Providers.tsx";
 import { SshPage } from "./components/Ssh.tsx";
@@ -29,7 +31,7 @@ import { api, serverEvents } from "./api.ts";
 import { LOCAL_PROVIDER } from "./local.ts";
 import { inTauri } from "./window.ts";
 
-type SidePane = "terminal" | "changes" | "browser" | "files" | "sidechat";
+type SidePane = "terminal" | "changes" | "browser" | "device" | "files" | "sidechat";
 
 function readStored<T extends string>(key: string, fallback: T): T {
 	try {
@@ -132,6 +134,10 @@ export function App() {
 	useEffect(() => {
 		if (usingBrowser) showPane("browser");
 	}, [usingBrowser, showPane]);
+	const usingDevice = Object.values(state.running).some((tool) => tool.name.startsWith("device_"));
+	useEffect(() => {
+		if (usingDevice) showPane("device");
+	}, [usingDevice, showPane]);
 	const lastEscape = useRef(0);
 
 	// "system" follows the OS light/dark preference, like the TUI's automatic theme.
@@ -339,7 +345,7 @@ export function App() {
 									</button>
 									<button
 										type="button"
-										className="btn-accent"
+										className="btn-ghost new-chat"
 										disabled={state.connection !== "ready" || state.isStreaming}
 										onClick={() => void actions.newSession()}
 									>
@@ -355,6 +361,7 @@ export function App() {
 											["terminal", "Terminal", <SquareTerminal key="t" size={17} />],
 											["changes", "Changes", <Diff key="c" size={17} />],
 											["browser", "Browser", <Globe key="b" size={17} />],
+											["device", "Device", <Smartphone key="d" size={17} />],
 											["files", "Files", <Folder key="f" size={17} />],
 										] as const
 									).map(([id, label, icon]) => (
@@ -413,7 +420,15 @@ export function App() {
 								/>
 							)}
 							<section className="thread" hidden={Boolean(sidePane) && paneExpanded}>
-								<Thread state={state} actions={actions} />
+								<Thread
+									state={state}
+									actions={actions}
+									onOpenDiff={() => showPane("changes")}
+									onOpenFile={(path) => {
+										setFileTarget({ path, nonce: Date.now() });
+										showPane("files");
+									}}
+								/>
 								<div className="footer">
 									<div className="footer-inner">
 										{widgets("aboveEditor")}
@@ -448,6 +463,17 @@ export function App() {
 									width={paneWidth}
 									onResize={resizePane}
 									onClose={() => showPane(null)}
+								/>
+							)}
+							{mounted.has("device") && (
+								<DevicePane
+									hidden={sidePane !== "device"}
+									expanded={paneExpanded}
+									onToggleExpand={() => setPaneExpanded(!paneExpanded)}
+									width={paneWidth}
+									onResize={resizePane}
+									onClose={() => showPane(null)}
+									toast={actions.toast}
 								/>
 							)}
 							{sidePane === "changes" && (
@@ -507,6 +533,7 @@ export function App() {
 					</>
 				)}
 				{page === "mcp" && <McpPage state={state} actions={actions} />}
+				{page === "skills" && <SkillsPage state={state} actions={actions} />}
 				{page === "ssh" && <SshPage actions={actions} />}
 				{page === "local" && (
 					<>
@@ -517,7 +544,7 @@ export function App() {
 				{page === "providers" && (
 					<>
 						<PageHeader title="Providers" />
-						<ProvidersPage actions={actions} />
+						<ProvidersPage state={state} actions={actions} />
 					</>
 				)}
 				{page === "settings" && (

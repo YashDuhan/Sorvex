@@ -156,6 +156,7 @@ export default function guiBridge(pi: ExtensionAPI): void {
 	if (desktopUrl) {
 		registerSshTools(pi);
 		registerBrowserTools(pi);
+		registerDeviceTools(pi);
 	}
 
 	pi.on("tool_result", (event) => {
@@ -393,5 +394,110 @@ function registerBrowserTools(pi: ExtensionAPI): void {
 		"Wait for some text to appear on the page, or for a number of milliseconds (max 10s).",
 		Type.Object({ text: Type.Optional(Type.String()), ms: Type.Optional(Type.Number()) }),
 		(p) => ({ action: "wait", text: p.text, ms: p.ms }),
+	);
+}
+
+/**
+ * device_* tools: drive the Android emulator the user sees in the Device pane, over adb. device_ui lists the screen's
+ * elements with refs; tap and type act on a ref or on screen pixel coordinates.
+ */
+function registerDeviceTools(pi: ExtensionAPI): void {
+	type Input = Record<string, unknown> & { action: string };
+
+	const run = async (input: Input) => {
+		const token = tokenSlot.__sorvexDesktopSshToken;
+		if (!token) throw new Error("Device tools are not ready in this session. Ask the user to restart the agent from Sorvex Desktop.");
+		const result = await desktopApi<{ text: string; image?: string; mimeType?: string }>("/api/device/agent/act", { token, input });
+		const content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[] = [{ type: "text", text: result.text }];
+		if (result.image) content.push({ type: "image", data: result.image, mimeType: result.mimeType ?? "image/png" });
+		return { content, details: { action: input.action, show: input.action === "screenshot" && input.show === true } };
+	};
+
+	const serial = { serial: Type.Optional(Type.String({ description: "adb serial, e.g. emulator-5554. Defaults to the running emulator." })) };
+	const tool = (name: string, description: string, parameters: ReturnType<typeof Type.Object>, toInput: (params: Record<string, unknown>) => Input) =>
+		pi.registerTool({
+			name,
+			label: name.replace("_", " "),
+			description,
+			parameters,
+			execute: (_toolCallId, params) => run(toInput(params as Record<string, unknown>)),
+		});
+
+	const guide = " The device is an Android emulator shared with the user, who watches it in the Device pane. Call device_ui to get numbered elements, then act by ref.";
+
+	tool("device_list", "List running Android devices and the virtual devices (AVDs) that can be booted.", Type.Object({}), () => ({ action: "devices" }));
+	tool(
+		"device_boot",
+		`Boot an Android virtual device (the first one when avd is omitted) and wait until it has started.${guide}`,
+		Type.Object({ avd: Type.Optional(Type.String()) }),
+		(p) => ({ action: "boot", avd: p.avd }),
+	);
+	tool(
+		"device_ui",
+		`List the current screen's elements with refs, labels and center coordinates, plus the foreground app. Refs change when the screen changes, so call it again before acting.${guide}`,
+		Type.Object(serial),
+		(p) => ({ action: "ui", serial: p.serial }),
+	);
+	tool(
+		"device_screenshot",
+		"Take a screenshot of the device screen. Set show to true only when the user should see the image in the chat; leave it false when you are inspecting the screen yourself.",
+		Type.Object({ ...serial, show: Type.Optional(Type.Boolean()) }),
+		(p) => ({ action: "screenshot", serial: p.serial, show: p.show === true }),
+	);
+	tool(
+		"device_tap",
+		`Tap an element by ref from device_ui, or at x/y screen pixels. Set long to true for a long press.${guide}`,
+		Type.Object({ ...serial, ref: Type.Optional(Type.Number()), x: Type.Optional(Type.Number()), y: Type.Optional(Type.Number()), long: Type.Optional(Type.Boolean()) }),
+		(p) => ({ action: "tap", serial: p.serial, ref: p.ref, x: p.x, y: p.y, long: p.long }),
+	);
+	tool(
+		"device_type",
+		`Type ASCII text into the focused field, or tap the element with ref first. Set submit to press Enter afterwards. Never type passwords or payment details; ask the user to enter them in the Device pane.${guide}`,
+		Type.Object({ ...serial, text: Type.String(), ref: Type.Optional(Type.Number()), submit: Type.Optional(Type.Boolean()) }),
+		(p) => ({ action: "type", serial: p.serial, text: p.text, ref: p.ref, submit: p.submit }),
+	);
+	tool(
+		"device_swipe",
+		"Swipe from x1,y1 to x2,y2 in screen pixels, or in a direction: up (scrolls content down), down, left, right. ms sets the duration (default 300).",
+		Type.Object({
+			...serial,
+			direction: Type.Optional(Type.String()),
+			x1: Type.Optional(Type.Number()),
+			y1: Type.Optional(Type.Number()),
+			x2: Type.Optional(Type.Number()),
+			y2: Type.Optional(Type.Number()),
+			ms: Type.Optional(Type.Number()),
+		}),
+		(p) => ({ action: "swipe", serial: p.serial, direction: p.direction, x1: p.x1, y1: p.y1, x2: p.x2, y2: p.y2, ms: p.ms }),
+	);
+	tool(
+		"device_key",
+		"Press a hardware or system key: back, home, recents, enter, delete, tab, escape, power, volume_up, volume_down, menu, search, up, down, left, right, or an Android keycode number.",
+		Type.Object({ ...serial, key: Type.String() }),
+		(p) => ({ action: "key", serial: p.serial, key: p.key }),
+	);
+	tool("device_launch", "Launch an installed app by package name, e.g. com.android.settings.", Type.Object({ ...serial, package: Type.String() }), (p) => ({
+		action: "launch",
+		serial: p.serial,
+		package: p.package,
+	}));
+	tool("device_open_url", "Open a URL or deep link (myapp://...) on the device.", Type.Object({ ...serial, url: Type.String() }), (p) => ({ action: "open_url", serial: p.serial, url: p.url }));
+	tool("device_install", "Install or update an APK from an absolute path on this computer.", Type.Object({ ...serial, path: Type.String() }), (p) => ({
+		action: "install",
+		serial: p.serial,
+		path: p.path,
+	}));
+	tool("device_apps", "List the apps installed on the device, excluding system apps.", Type.Object(serial), (p) => ({ action: "apps", serial: p.serial }));
+	tool(
+		"device_wait",
+		"Wait on the device. With text: re-read the screen until that text (or content description) appears, up to timeoutMs (default 10s, max 30s). With only ms: pause that long (max 10s). With neither: wait until the screen has labelled elements again, e.g. after an app launch or a dialog closing. Use it instead of guessing; then call device_ui.",
+		Type.Object({ ...serial, text: Type.Optional(Type.String()), ms: Type.Optional(Type.Number()), timeoutMs: Type.Optional(Type.Number()) }),
+		(p) => ({ action: "wait", serial: p.serial, text: p.text, ms: p.ms, timeoutMs: p.timeoutMs }),
+	);
+	tool(
+		"device_logcat",
+		"Return recent device logs. lines defaults to 200; filter is a logcat filter spec such as 'ActivityManager:I *:S'.",
+		Type.Object({ ...serial, lines: Type.Optional(Type.Number()), filter: Type.Optional(Type.String()) }),
+		(p) => ({ action: "logcat", serial: p.serial, lines: p.lines, filter: p.filter }),
 	);
 }

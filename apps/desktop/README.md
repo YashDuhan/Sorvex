@@ -44,6 +44,8 @@ To work on the UI in a browser instead, run `npm run server:watch` and `npm run 
 - Streaming text, collapsible reasoning, and tool calls with status, arguments, results and nested subagent calls.
 - Session list for the working folder.
 - Model, thinking-level and mode (build / plan / security) pickers.
+  - The model picker has a provider rail (favorites first), search across every provider, a star to pin models to favorites, and Ctrl+1 to Ctrl+9 (Cmd on macOS) for the first nine rows.
+- After a turn that edited or wrote files, a card under the reply lists the changed files as a folder tree with added and removed lines; it opens the file, or the Changes pane with **Open diff**.
 - Slash-command suggestions; while the agent runs, Enter steers it and Esc stops it.
 - Message actions:
   - **Assistant replies:** copy, read aloud, and a stats tooltip.
@@ -113,6 +115,46 @@ To work on the UI in a browser instead, run `npm run server:watch` and `npm run 
 - Credentials are stored in `~/.sorvex/agent/desktop/ssh` (directory 0700, files 0600). They are never returned to the UI or the model.
 - Remote commands need a per-launch token, which the server hands to the bridge extension in memory, so a `curl` from the AI's local shell can't run them.
 
+**Remote access**
+- Drive Sorvex from a phone through the Sorvex-Browser relay (github.com/YashDuhan/Sorvex-Browser).
+- Set it up in Settings → Remote access: a toggle, the relay URL, and **Confirm new phones** (on by default).
+- The server dials out to the relay, so no inbound port is opened.
+- **Pairing:** **Pair a phone** shows a one-time code and its QR code.
+  - A code pairs exactly one phone and is used up by the first phone that proves it holds it.
+  - A code changes every minute; the window closes after 5 minutes.
+  - With confirmation on, you click Allow or Deny for the phone that scanned it.
+- **Device keys:** each paired phone gets its own device key.
+  - **Remove** revokes that key.
+  - A phone unused for 30 days is removed automatically.
+  - Keys and the host's room id are in `~/.sorvex/agent/desktop/remote.json` (mode 0600). Codes are never stored.
+- **Encryption:** every connection runs an ephemeral X25519 exchange authenticated by the code or the device key, then AES-256-GCM. The relay sees only room ids and ciphertext.
+- **What phones can call:** only the chat, session and approval routes (allowlist in `server/remote.ts`). Credentials, SSH, MCP, the browser and settings writes stay local.
+- **Open dialogs and approvals** are tracked on the server:
+  - a window or phone that connects mid-run still sees them;
+  - answering in one place closes them everywhere.
+
+**Device (Android emulators)**
+- Open it with the phone button in the chat header. It also opens by itself when the AI starts using a device tool.
+- Setup: finds the Android SDK (`ANDROID_HOME`, `ANDROID_SDK_ROOT`, or the Android Studio default). When parts are missing, it installs them after you accept the Android SDK License Agreement in the pane: a Temurin 21 JDK if there is no Java 17+, the SDK command-line tools, platform-tools, the emulator, the newest Google APIs system image, and a `Sorvex_Pixel` virtual device. A fresh install is about 2 GB.
+- On first use it installs [Expo Device Hub](https://github.com/expo/expo-device-hub) (`expo-device-hub`, pinned, lifecycle scripts off) into `~/.sorvex/agent/desktop/tools` and runs it on 127.0.0.1 with a session token.
+- With no emulator running, the pane lists the virtual devices on this machine with Start and Stop. The **+** button starts one, or creates a new one from an installed system image and device profile, and can download the newest Google APIs image (about 1.5 GB) after you accept the license.
+- With one running, the pane shows its live screen (the hub's H.264 stream, decoded with WebCodecs; screenshots four times a second where WebCodecs is missing). Click and drag to touch, scroll to swipe, and type or paste when the screen is focused; Escape is Back.
+  - **Above the screen:** the foreground app with CPU, memory and network graphs.
+  - **Beside it:** Home, Back, Recent apps, Rotate, dark or light theme, text size, device settings (on-screen keyboard, bold text, high-contrast text, animations, Wi-Fi and mobile data), screenshot, volume, power and shut down, a 3D view, the device frame, and fill the window.
+  - **Annotate** (the pen on the rail toggles the bar under the phone), the same tools as the Browser pane:
+    - **Select element:** hover to highlight what is under the pointer; click to attach it to your next message with its class, text, content description, resource id, bounds, app package, nearby text and a cropped screenshot. It comes from the screen's accessibility tree.
+    - **Draw:** pen, rectangle, ellipse and arrow in several colors and widths, with undo and redo, on a frozen copy of the screen; **Add to chat** attaches it as an image.
+    - While a tool is active the phone shows flat, so picks and strokes line up with the screen; it returns to 3D afterwards.
+  - **3D view:** t3code's WebGL phone (three.js, ported into `src/device3d` under its MIT license) with the live screen as its display. Drag the screen to touch it; drag around the phone or scroll with two fingers to spin it, with momentum, and it settles back toward the front. Double-click beside the phone to face it again.
+- AI tools, over `adb`:
+  - **Devices:** `device_list`, `device_boot`.
+  - **Reading:** `device_ui` (numbered elements with their centers), `device_screenshot`, `device_apps`, `device_logcat`, and `device_wait` (until some text appears, until the screen has labelled elements again, or a plain pause).
+  - **Acting:** `device_tap` and `device_type` (by element number or coordinates), `device_swipe`, `device_key`, `device_launch`, `device_open_url`, `device_install` (APK).
+
+**Skills**
+- **Installed:** the skills the agent loaded for this folder, with their SKILL.md; skills in the user or project skills folder can be removed.
+- **Registry:** the Hermes skills index (Hermes, Anthropic, OpenAI, HuggingFace, NVIDIA, GitHub collections, skills.sh, ClawHub). Installing downloads the entry's SKILL.md into `~/.sorvex/agent/skills/<name>/`, or the project's `.sorvex/skills/`.
+
 **MCP**
 - Add, enable, disable, reconnect, sign in to, and delete MCP servers.
 - Edit the raw `~/.sorvex/agent/mcp.json`.
@@ -128,7 +170,7 @@ To work on the UI in a browser instead, run `npm run server:watch` and `npm run 
 - **Bottom left:** attach, an Effort pill (thinking level) and a Tools pill (per-tool permissions).
 - **Bottom right:** dictation, voice chat, the voice menu, the model select, and send.
 - **Below:** a context bar showing tokens used against the context window.
-- **Border:** sweeps in the mode colour while the agent runs, pulses red while dictating, and turns green in voice chat.
+- **Border:** a hairline tinted by plan or security mode; while the agent runs, a short segment travels along its top edge. It pulses red while dictating and turns green in voice chat.
 
 ## Files
 
@@ -140,5 +182,8 @@ To work on the UI in a browser instead, run `npm run server:watch` and `npm run 
 | `server/credentials.ts` | Providers, logins, keys and reviewer completions through `ModelRuntime`. |
 | `server/voice.ts`, `server/kokoro.ts` | Speech endpoints and the local Kokoro process. |
 | `server/mcp.ts` | MCP server list, add, remove and enable, using Sorvex's MCP config functions. |
+| `server/devices.ts` | Android SDK detection and setup, emulators (list, create, start, stop, rotate), the Expo Device Hub process with its API and metrics relay, and the `device_*` tool actions over adb. |
+| `server/skills.ts` | Installed skills, and the skill registry index, search and install. |
 | `server/settings.ts` | `~/.sorvex/agent/desktop/settings.json` and its defaults. |
+| `server/remote.ts`, `server/remote-crypto.ts` | Remote access: relay connection, one-time pairing codes, per-phone device keys, end-to-end encryption, and the route allowlist for phones. |
 | `extension/gui-bridge.ts` | Loaded into Sorvex with `--extension`. Applies permissions and safety rules, sends approvals, and refreshes models after credential changes. |

@@ -1,6 +1,8 @@
 import { createRoot } from "react-dom/client";
 import { api } from "./api.ts";
 import { App } from "./App.tsx";
+import "@fontsource-variable/onest";
+import "@fontsource-variable/jetbrains-mono";
 import "./styles.css";
 
 // No StrictMode: its double-run effects would start and stop the Sorvex child process twice.

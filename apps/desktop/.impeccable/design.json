@@ -1,0 +1,685 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-31T23:57:38.670174+00:00",
+  "title": "Design System: Sorvex Desktop",
+  "extensions": {
+    "colorMeta": {
+      "canvas": {
+        "role": "neutral",
+        "displayName": "True Black Canvas",
+        "canonical": "#000",
+        "tonalRamp": [
+          "#000000",
+          "#0a0a0b",
+          "#111112",
+          "#2a2a2d",
+          "#5f5f66",
+          "#9a9aa0",
+          "#d4d4d8",
+          "#f5f5f6"
+        ]
+      },
+      "chrome": {
+        "role": "neutral",
+        "displayName": "Chrome Band",
+        "canonical": "#0a0a0b",
+        "tonalRamp": [
+          "#000000",
+          "#0a0a0b",
+          "#111112",
+          "#2a2a2d",
+          "#5f5f66",
+          "#9a9aa0",
+          "#d4d4d8",
+          "#f5f5f6"
+        ]
+      },
+      "raised": {
+        "role": "neutral",
+        "displayName": "Raised Graphite",
+        "canonical": "#111112",
+        "tonalRamp": [
+          "#000000",
+          "#0a0a0b",
+          "#111112",
+          "#2a2a2d",
+          "#5f5f66",
+          "#9a9aa0",
+          "#d4d4d8",
+          "#f5f5f6"
+        ]
+      },
+      "code-well": {
+        "role": "neutral",
+        "displayName": "Code Well",
+        "canonical": "#0c0c0d",
+        "tonalRamp": [
+          "#000000",
+          "#0a0a0b",
+          "#111112",
+          "#2a2a2d",
+          "#5f5f66",
+          "#9a9aa0",
+          "#d4d4d8",
+          "#f5f5f6"
+        ]
+      },
+      "hairline-subtle": {
+        "role": "neutral",
+        "displayName": "Subtle Hairline",
+        "canonical": "rgba(255, 255, 255, 0.06)",
+        "tonalRamp": [
+          "#000000",
+          "#0a0a0b",
+          "#111112",
+          "#2a2a2d",
+          "#5f5f66",
+          "#9a9aa0",
+          "#d4d4d8",
+          "#f5f5f6"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "rgba(255, 255, 255, 0.085)",
+        "tonalRamp": [
+          "#000000",
+          "#0a0a0b",
+          "#111112",
+          "#2a2a2d",
+          "#5f5f66",
+          "#9a9aa0",
+          "#d4d4d8",
+          "#f5f5f6"
+        ]
+      },
+      "hairline-overlay": {
+        "role": "neutral",
+        "displayName": "Overlay Hairline",
+        "canonical": "rgba(255, 255, 255, 0.1)",
+        "tonalRamp": [
+          "#000000",
+          "#0a0a0b",
+          "#111112",
+          "#2a2a2d",
+          "#5f5f66",
+          "#9a9aa0",
+          "#d4d4d8",
+          "#f5f5f6"
+        ]
+      },
+      "hairline-strong": {
+        "role": "neutral",
+        "displayName": "Strong Hairline",
+        "canonical": "rgba(255, 255, 255, 0.16)",
+        "tonalRamp": [
+          "#000000",
+          "#0a0a0b",
+          "#111112",
+          "#2a2a2d",
+          "#5f5f66",
+          "#9a9aa0",
+          "#d4d4d8",
+          "#f5f5f6"
+        ]
+      },
+      "hairline-focus": {
+        "role": "neutral",
+        "displayName": "Focus Hairline",
+        "canonical": "rgba(255, 255, 255, 0.24)",
+        "tonalRamp": [
+          "#000000",
+          "#0a0a0b",
+          "#111112",
+          "#2a2a2d",
+          "#5f5f66",
+          "#9a9aa0",
+          "#d4d4d8",
+          "#f5f5f6"
+        ]
+      },
+      "wash-hover": {
+        "role": "neutral",
+        "displayName": "Hover Wash",
+        "canonical": "rgba(255, 255, 255, 0.055)",
+        "tonalRamp": [
+          "#000000",
+          "#0a0a0b",
+          "#111112",
+          "#2a2a2d",
+          "#5f5f66",
+          "#9a9aa0",
+          "#d4d4d8",
+          "#f5f5f6"
+        ]
+      },
+      "wash-active": {
+        "role": "neutral",
+        "displayName": "Active Wash",
+        "canonical": "rgba(255, 255, 255, 0.075)",
+        "tonalRamp": [
+          "#000000",
+          "#0a0a0b",
+          "#111112",
+          "#2a2a2d",
+          "#5f5f66",
+          "#9a9aa0",
+          "#d4d4d8",
+          "#f5f5f6"
+        ]
+      },
+      "wash-selected": {
+        "role": "neutral",
+        "displayName": "Selected Wash",
+        "canonical": "rgba(255, 255, 255, 0.09)",
+        "tonalRamp": [
+          "#000000",
+          "#0a0a0b",
+          "#111112",
+          "#2a2a2d",
+          "#5f5f66",
+          "#9a9aa0",
+          "#d4d4d8",
+          "#f5f5f6"
+        ]
+      },
+      "ink-heading": {
+        "role": "neutral",
+        "displayName": "Heading Ink",
+        "canonical": "#f5f5f6",
+        "tonalRamp": [
+          "#000000",
+          "#0a0a0b",
+          "#111112",
+          "#2a2a2d",
+          "#5f5f66",
+          "#9a9aa0",
+          "#d4d4d8",
+          "#f5f5f6"
+        ]
+      },
+      "ink-primary": {
+        "role": "neutral",
+        "displayName": "Primary Ink",
+        "canonical": "#e6e6e8",
+        "tonalRamp": [
+          "#000000",
+          "#0a0a0b",
+          "#111112",
+          "#2a2a2d",
+          "#5f5f66",
+          "#9a9aa0",
+          "#d4d4d8",
+          "#f5f5f6"
+        ]
+      },
+      "ink-secondary": {
+        "role": "neutral",
+        "displayName": "Secondary Ink",
+        "canonical": "#bdbdc2",
+        "tonalRamp": [
+          "#000000",
+          "#0a0a0b",
+          "#111112",
+          "#2a2a2d",
+          "#5f5f66",
+          "#9a9aa0",
+          "#d4d4d8",
+          "#f5f5f6"
+        ]
+      },
+      "ink-tertiary": {
+        "role": "neutral",
+        "displayName": "Tertiary Ink",
+        "canonical": "#9a9aa0",
+        "tonalRamp": [
+          "#000000",
+          "#0a0a0b",
+          "#111112",
+          "#2a2a2d",
+          "#5f5f66",
+          "#9a9aa0",
+          "#d4d4d8",
+          "#f5f5f6"
+        ]
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Muted Ink",
+        "canonical": "#85858b",
+        "tonalRamp": [
+          "#000000",
+          "#0a0a0b",
+          "#111112",
+          "#2a2a2d",
+          "#5f5f66",
+          "#9a9aa0",
+          "#d4d4d8",
+          "#f5f5f6"
+        ]
+      },
+      "ink-faint": {
+        "role": "neutral",
+        "displayName": "Faint Ink",
+        "canonical": "#7f7f85",
+        "tonalRamp": [
+          "#000000",
+          "#0a0a0b",
+          "#111112",
+          "#2a2a2d",
+          "#5f5f66",
+          "#9a9aa0",
+          "#d4d4d8",
+          "#f5f5f6"
+        ]
+      },
+      "signal-blue": {
+        "role": "primary",
+        "displayName": "Signal Blue",
+        "canonical": "#4c8dff",
+        "tonalRamp": [
+          "#0b2152",
+          "#123a85",
+          "#1f63e6",
+          "#3477f5",
+          "#4c8dff",
+          "#7aabff",
+          "#adcbff",
+          "#e3edff"
+        ]
+      },
+      "signal-blue-border": {
+        "role": "primary",
+        "displayName": "Signal Blue Hairline",
+        "canonical": "rgba(76, 141, 255, 0.4)",
+        "tonalRamp": [
+          "#0b2152",
+          "#123a85",
+          "#1f63e6",
+          "#3477f5",
+          "#4c8dff",
+          "#7aabff",
+          "#adcbff",
+          "#e3edff"
+        ]
+      },
+      "plan-violet": {
+        "role": "secondary",
+        "displayName": "Plan Violet",
+        "canonical": "#a78bfa",
+        "tonalRamp": [
+          "#2e1065",
+          "#4c1d95",
+          "#6d28d9",
+          "#7c3aed",
+          "#8b5cf6",
+          "#a78bfa",
+          "#c4b5fd",
+          "#ede9fe"
+        ]
+      },
+      "security-red": {
+        "role": "secondary",
+        "displayName": "Security Red",
+        "canonical": "#f87171",
+        "tonalRamp": [
+          "#450a0a",
+          "#7f1d1d",
+          "#b91c1c",
+          "#dc2626",
+          "#ef4444",
+          "#f87171",
+          "#fca5a5",
+          "#fee2e2"
+        ]
+      },
+      "added-green": {
+        "role": "tertiary",
+        "displayName": "Added Green",
+        "canonical": "#4ade80",
+        "tonalRamp": [
+          "#052e16",
+          "#14532d",
+          "#15803d",
+          "#16a34a",
+          "#22c55e",
+          "#4ade80",
+          "#86efac",
+          "#dcfce7"
+        ]
+      },
+      "warning-amber": {
+        "role": "tertiary",
+        "displayName": "Warning Amber",
+        "canonical": "#fbbf24",
+        "tonalRamp": [
+          "#451a03",
+          "#78350f",
+          "#b45309",
+          "#d97706",
+          "#f59e0b",
+          "#fbbf24",
+          "#fcd34d",
+          "#fef3c7"
+        ]
+      },
+      "light-canvas": {
+        "role": "neutral",
+        "displayName": "Light Canvas",
+        "canonical": "#fbfbfb",
+        "tonalRamp": [
+          "#000000",
+          "#0a0a0b",
+          "#111112",
+          "#2a2a2d",
+          "#5f5f66",
+          "#9a9aa0",
+          "#d4d4d8",
+          "#f5f5f6"
+        ]
+      },
+      "light-chrome": {
+        "role": "neutral",
+        "displayName": "Light Chrome",
+        "canonical": "#f3f3f4",
+        "tonalRamp": [
+          "#000000",
+          "#0a0a0b",
+          "#111112",
+          "#2a2a2d",
+          "#5f5f66",
+          "#9a9aa0",
+          "#d4d4d8",
+          "#f5f5f6"
+        ]
+      },
+      "light-raised": {
+        "role": "neutral",
+        "displayName": "Light Raised",
+        "canonical": "#fff",
+        "tonalRamp": [
+          "#000000",
+          "#0a0a0b",
+          "#111112",
+          "#2a2a2d",
+          "#5f5f66",
+          "#9a9aa0",
+          "#d4d4d8",
+          "#f5f5f6"
+        ]
+      },
+      "light-ink-heading": {
+        "role": "neutral",
+        "displayName": "Light Heading Ink",
+        "canonical": "#111113",
+        "tonalRamp": [
+          "#000000",
+          "#0a0a0b",
+          "#111112",
+          "#2a2a2d",
+          "#5f5f66",
+          "#9a9aa0",
+          "#d4d4d8",
+          "#f5f5f6"
+        ]
+      },
+      "light-ink-primary": {
+        "role": "neutral",
+        "displayName": "Light Primary Ink",
+        "canonical": "#1f1f23",
+        "tonalRamp": [
+          "#000000",
+          "#0a0a0b",
+          "#111112",
+          "#2a2a2d",
+          "#5f5f66",
+          "#9a9aa0",
+          "#d4d4d8",
+          "#f5f5f6"
+        ]
+      },
+      "light-signal-blue": {
+        "role": "primary",
+        "displayName": "Light Signal Blue",
+        "canonical": "#1f63e6",
+        "tonalRamp": [
+          "#0b2152",
+          "#123a85",
+          "#1f63e6",
+          "#3477f5",
+          "#4c8dff",
+          "#7aabff",
+          "#adcbff",
+          "#e3edff"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Empty-state question naming the folder; the largest type in the shell."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Dialog headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Replies, user turns, composer text."
+      },
+      "body-sm": {
+        "displayName": "Body Small",
+        "purpose": "Rows, starters, menus, settings copy, header title."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Mode tabs, guard badge, composer controls, row metadata."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Paths, code, diff and token counts, status bar."
+      }
+    },
+    "shadows": [
+      {
+        "name": "pop",
+        "value": "0 16px 40px -12px rgba(0, 0, 0, 0.9)",
+        "purpose": "Popovers, menus, modals, toasts. Light theme uses rgba(0, 0, 0, 0.18)."
+      },
+      {
+        "name": "composer-seat",
+        "value": "0 18px 40px -20px rgba(0, 0, 0, 0.9)",
+        "purpose": "The composer only, seating it above the scrolling thread."
+      },
+      {
+        "name": "window-ring",
+        "value": "0 0 0 1px var(--border-default), 0 6px 16px -4px rgba(0, 0, 0, 0.6)",
+        "purpose": "Frameless window root."
+      },
+      {
+        "name": "focus-ring",
+        "value": "outline: 1.5px solid var(--accent-blue); outline-offset: 1px",
+        "purpose": "Global :focus-visible."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state",
+        "value": "0.15s",
+        "purpose": "Background and colour transitions on buttons, rail items, switches."
+      },
+      {
+        "name": "state-fast",
+        "value": "0.12s",
+        "purpose": "Row and starter colour shifts, chevron rotation, picker rail items."
+      },
+      {
+        "name": "working-segment",
+        "value": "1.6s cubic-bezier(0.45, 0, 0.55, 1) infinite",
+        "purpose": "The 35%-wide segment travelling the composer's top hairline while the agent runs; disabled under prefers-reduced-motion."
+      },
+      {
+        "name": "toast-in",
+        "value": "0.18s ease-out",
+        "purpose": "Toast entry."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "short-window",
+        "value": "max-height: 680px"
+      },
+      {
+        "name": "composer-narrow",
+        "value": "@container composer (max-width: 640px)"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Solid near-white on black; the primary action in dialogs and setup.",
+      "html": "<button class=\"ds-btn-primary\">Install</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 8px; font: 500 13px var(--font-sans, 'Onest Variable', sans-serif); background: var(--text-heading, #f5f5f6); color: var(--bg-root, #000); border: 1px solid transparent; cursor: pointer; transition: background 0.15s; } .ds-btn-primary:hover { background: color-mix(in srgb, var(--text-heading, #f5f5f6) 86%, var(--bg-root, #000)); } .ds-btn-primary:focus-visible { outline: 1.5px solid var(--accent-blue, #4c8dff); outline-offset: 1px; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Hairline-bordered secondary action.",
+      "html": "<button class=\"ds-btn-ghost\">Cancel</button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 8px; font: 400 13px var(--font-sans, 'Onest Variable', sans-serif); color: var(--text-secondary, #bdbdc2); border: 1px solid var(--border-default, rgba(255,255,255,0.085)); background: transparent; cursor: pointer; transition: background 0.15s, color 0.15s; } .ds-btn-ghost:hover { background: var(--bg-hover, rgba(255,255,255,0.055)); color: var(--text-primary, #e6e6e8); } .ds-btn-ghost:focus-visible { outline: 1.5px solid var(--accent-blue, #4c8dff); outline-offset: 1px; }"
+    },
+    {
+      "name": "Composer",
+      "kind": "custom",
+      "refersTo": "composer",
+      "description": "Raised prompt box with mode tabs, ghost controls, model select and send; the working segment travels its top edge while the agent runs.",
+      "html": "<div class=\"ds-composer ds-running\"><div class=\"ds-composer-top\"><button class=\"ds-tab ds-on\">Build</button><button class=\"ds-tab\">Plan</button><button class=\"ds-tab\">Security</button></div><textarea class=\"ds-composer-input\" rows=\"1\" placeholder=\"Send a message, / for commands, @ for files\"></textarea><div class=\"ds-composer-actions\"><button class=\"ds-ctl\">Effort High</button><span style=\"flex:1\"></span><button class=\"ds-model\"><span class=\"ds-dot\"></span>Gemini 2.5 Flash</button><button class=\"ds-send ds-ready\" aria-label=\"Send\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M22 2 11 13\"/><path d=\"M22 2 15 22l-4-9-9-4 20-7z\"/></svg></button></div></div>",
+      "css": ".ds-composer { position: relative; display: flex; flex-direction: column; gap: 8px; width: 480px; padding: 10px; border-radius: 14px; background: var(--bg-elevated, #111112); box-shadow: 0 18px 40px -20px rgba(0,0,0,0.9); font-family: var(--font-sans, 'Onest Variable', sans-serif); } .ds-composer::before { content: ''; position: absolute; inset: 0; border-radius: inherit; border: 1px solid rgba(255,255,255,0.11); pointer-events: none; transition: border-color 0.2s; } .ds-composer:focus-within::before { border-color: rgba(255,255,255,0.2); } .ds-running::after { content: ''; position: absolute; top: 0; left: 14px; right: 14px; height: 1px; background: linear-gradient(90deg, transparent, var(--text-secondary, #bdbdc2) 50%, transparent); background-size: 35% 100%; background-repeat: no-repeat; animation: ds-work 1.6s cubic-bezier(0.45,0,0.55,1) infinite; } @keyframes ds-work { from { background-position: -40% 0; } to { background-position: 140% 0; } } @media (prefers-reduced-motion: reduce) { .ds-running::after { animation: none; } } .ds-composer-top { display: flex; gap: 4px; } .ds-tab { height: 24px; padding: 0 9px; border-radius: 6px; border: 0; background: none; font-size: 12px; font-weight: 500; color: var(--text-muted, #85858b); cursor: pointer; } .ds-tab:hover { color: var(--text-secondary, #bdbdc2); } .ds-tab.ds-on { color: var(--text-heading, #f5f5f6); background: var(--bg-active, rgba(255,255,255,0.075)); } .ds-composer-input { border: 0; outline: none; resize: none; background: transparent; padding: 4px 7px; font: 14px/1.5 inherit; color: var(--text-primary, #e6e6e8); caret-color: var(--accent-blue, #4c8dff); } .ds-composer-actions { display: flex; align-items: center; gap: 6px; } .ds-ctl, .ds-model { height: 30px; padding: 0 10px; border-radius: 8px; border: 0; background: none; font-size: 12px; color: var(--text-secondary, #bdbdc2); cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: background 0.15s, color 0.15s; } .ds-ctl:hover, .ds-model:hover { background: var(--bg-hover, rgba(255,255,255,0.055)); color: var(--text-primary, #e6e6e8); } .ds-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-green, #4ade80); } .ds-send { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; border: 0; color: var(--text-faint, #7f7f85); background: var(--bg-active, rgba(255,255,255,0.075)); cursor: pointer; } .ds-send.ds-ready { color: var(--bg-root, #000); background: var(--text-heading, #f5f5f6); } .ds-tab:focus-visible, .ds-ctl:focus-visible, .ds-model:focus-visible, .ds-send:focus-visible { outline: 1.5px solid var(--accent-blue, #4c8dff); outline-offset: 1px; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Hairline field with blue focus border and caret.",
+      "html": "<input class=\"ds-input\" placeholder=\"Search skills\" />",
+      "css": ".ds-input { width: 260px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-default, rgba(255,255,255,0.085)); background: var(--bg-card, rgba(255,255,255,0.025)); outline: none; font: 13.5px var(--font-sans, 'Onest Variable', sans-serif); color: var(--text-primary, #e6e6e8); caret-color: var(--accent-blue, #4c8dff); } .ds-input::placeholder { color: var(--text-placeholder, #85858b); } .ds-input:focus { border-color: var(--accent-blue-border, rgba(76,141,255,0.4)); }"
+    },
+    {
+      "name": "Icon Rail",
+      "kind": "nav",
+      "refersTo": "rail-item-active",
+      "description": "60px chrome column of 36px icon items.",
+      "html": "<nav class=\"ds-rail\"><button class=\"ds-rail-item ds-active\" aria-label=\"Chat\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z\"/></svg></button><button class=\"ds-rail-item\" aria-label=\"Settings\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M12 2v3M12 19v3M2 12h3M19 12h3\"/></svg></button></nav>",
+      "css": ".ds-rail { width: 60px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 0; background: var(--bg-chrome, #0a0a0b); border-right: 1px solid var(--border-subtle, rgba(255,255,255,0.06)); } .ds-rail-item { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 8px; border: 1px solid transparent; background: none; color: var(--text-muted, #85858b); cursor: pointer; transition: background 0.15s, color 0.15s; } .ds-rail-item:hover { background: var(--bg-active, rgba(255,255,255,0.075)); color: var(--text-primary, #e6e6e8); } .ds-rail-item.ds-active { background: var(--bg-selected, rgba(255,255,255,0.09)); color: var(--text-heading, #f5f5f6); } .ds-rail-item:focus-visible { outline: 1.5px solid var(--accent-blue, #4c8dff); outline-offset: 1px; }"
+    },
+    {
+      "name": "Starter Rows",
+      "kind": "custom",
+      "refersTo": "list-row",
+      "description": "Empty-state question, mono path, and hairline-separated starter rows directly above the composer.",
+      "html": "<div class=\"ds-welcome\"><h1>What should we work on in Cypher?</h1><p class=\"ds-cwd\">/home/yas/Futurix/Cypher</p><div class=\"ds-starters\"><button class=\"ds-starter\">Explain this codebase<small>packages and entry points</small></button><button class=\"ds-starter\">Plan a change<small>switches to plan mode</small></button></div></div>",
+      "css": ".ds-welcome { width: 480px; font-family: var(--font-sans, 'Onest Variable', sans-serif); } .ds-welcome h1 { margin: 0; font-size: 20px; font-weight: 500; letter-spacing: -0.015em; color: var(--text-heading, #f5f5f6); } .ds-cwd { margin: 4px 0 18px; font: 12px var(--font-mono, 'JetBrains Mono Variable', monospace); color: var(--text-tertiary, #9a9aa0); } .ds-starters { display: flex; flex-direction: column; border-top: 1px solid var(--border-subtle, rgba(255,255,255,0.06)); } .ds-starter { display: flex; align-items: baseline; gap: 12px; padding: 9px 0; border: 0; border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.06)); background: none; font-size: 13.5px; color: var(--text-secondary, #bdbdc2); text-align: left; cursor: pointer; transition: color 0.12s; } .ds-starter small { margin-left: auto; font-size: 12px; color: var(--text-faint, #7f7f85); } .ds-starter:hover { color: var(--text-heading, #f5f5f6); } .ds-starter:hover small { color: var(--text-muted, #85858b); } .ds-starter:focus-visible { outline: 1.5px solid var(--accent-blue, #4c8dff); outline-offset: 1px; }"
+    },
+    {
+      "name": "Changed Files Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Raised card under a finished turn: title, mono +/- counts, open action, file tree.",
+      "html": "<div class=\"ds-cf\"><div class=\"ds-cf-head\"><span class=\"ds-cf-title\">2 files changed</span><span class=\"ds-counts\"><span class=\"ds-add\">+42</span><span class=\"ds-del\">-7</span></span><span style=\"flex:1\"></span><button class=\"ds-cf-open\">Open changes</button></div><div class=\"ds-cf-tree\"><button class=\"ds-cf-row\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><path d=\"M14 2v6h6\"/></svg><span class=\"ds-cf-name\">src/styles.css</span><span class=\"ds-counts\"><span class=\"ds-add\">+40</span><span class=\"ds-del\">-5</span></span></button></div></div>",
+      "css": ".ds-cf { width: 460px; border-radius: 12px; border: 1px solid var(--border-subtle, rgba(255,255,255,0.06)); background: var(--bg-elevated, #111112); overflow: hidden; font-family: var(--font-sans, 'Onest Variable', sans-serif); } .ds-cf-head { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; font-size: 13px; } .ds-cf-title { color: var(--text-primary, #e6e6e8); font-weight: 500; } .ds-counts { display: inline-flex; gap: 6px; font: 12px var(--font-mono, 'JetBrains Mono Variable', monospace); font-variant-numeric: tabular-nums; } .ds-add { color: var(--accent-green, #4ade80); } .ds-del { color: var(--accent-red, #f87171); } .ds-cf-open { height: 26px; padding: 0 9px; border-radius: 7px; border: 0; background: none; font-size: 12.5px; color: var(--text-secondary, #bdbdc2); cursor: pointer; } .ds-cf-open:hover { background: var(--bg-hover, rgba(255,255,255,0.055)); color: var(--text-heading, #f5f5f6); } .ds-cf-tree { padding: 4px 6px 6px; border-top: 1px solid var(--border-subtle, rgba(255,255,255,0.06)); } .ds-cf-row { display: flex; align-items: center; gap: 8px; width: 100%; height: 30px; padding: 0 10px; border: 0; border-radius: 7px; background: none; color: var(--text-secondary, #bdbdc2); cursor: pointer; text-align: left; } .ds-cf-row:hover { background: var(--bg-hover, rgba(255,255,255,0.055)); color: var(--text-primary, #e6e6e8); } .ds-cf-name { flex: 1; font: 12.5px var(--font-mono, 'JetBrains Mono Variable', monospace); } .ds-cf-open:focus-visible, .ds-cf-row:focus-visible { outline: 1.5px solid var(--accent-blue, #4c8dff); outline-offset: 1px; }"
+    },
+    {
+      "name": "Model Picker Row",
+      "kind": "custom",
+      "refersTo": "list-row",
+      "description": "Two-line model row with current check and keyboard badge.",
+      "html": "<div class=\"ds-mp\"><button class=\"ds-mp-row\"><span class=\"ds-mp-text\"><span class=\"ds-mp-name\">Gemini 2.5 Flash</span><small>google · 1.0M ctx · reasoning</small></span><span class=\"ds-kbd\">Ctrl+4</span></button><button class=\"ds-mp-row\"><span class=\"ds-mp-text\"><span class=\"ds-mp-name\">Gemini 2.5 Pro</span><small>google · 1.0M ctx · reasoning</small></span><span class=\"ds-kbd\">Ctrl+6</span></button></div>",
+      "css": ".ds-mp { width: 380px; padding: 6px; border-radius: 10px; border: 1px solid var(--border-overlay, rgba(255,255,255,0.1)); background: var(--bg-elevated, #111112); box-shadow: var(--shadow-pop, 0 16px 40px -12px rgba(0,0,0,0.9)); font-family: var(--font-sans, 'Onest Variable', sans-serif); } .ds-mp-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border: 0; border-radius: 7px; background: none; text-align: left; color: var(--text-secondary, #bdbdc2); cursor: pointer; } .ds-mp-row:hover { background: var(--bg-hover, rgba(255,255,255,0.055)); color: var(--text-primary, #e6e6e8); } .ds-mp-row:focus-visible { outline: 1.5px solid var(--accent-blue, #4c8dff); outline-offset: 1px; } .ds-mp-text { flex: 1; display: flex; flex-direction: column; } .ds-mp-name { font-size: 13px; } .ds-mp-text small { font-size: 11.5px; color: var(--text-faint, #7f7f85); font-variant-numeric: tabular-nums; } .ds-kbd { padding: 1px 5px; border-radius: 4px; border: 1px solid var(--border-default, rgba(255,255,255,0.085)); font-size: 10.5px; color: var(--text-faint, #7f7f85); }"
+    },
+    {
+      "name": "Switch",
+      "kind": "custom",
+      "refersTo": "switch-on",
+      "description": "34x20 pill; blue only when on.",
+      "html": "<button class=\"ds-switch ds-on\" role=\"switch\" aria-checked=\"true\" aria-label=\"Enabled\"></button>",
+      "css": ".ds-switch { position: relative; width: 34px; height: 20px; border: 0; border-radius: 999px; background: var(--bg-selected, rgba(255,255,255,0.09)); cursor: pointer; transition: background 0.15s; } .ds-switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--text-primary, #e6e6e8); transition: transform 0.15s; } .ds-switch.ds-on { background: var(--accent-blue, #4c8dff); } .ds-switch.ds-on::after { transform: translateX(14px); background: #fff; } .ds-switch:focus-visible { outline: 1.5px solid var(--accent-blue, #4c8dff); outline-offset: 1px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Dark Workbench",
+    "overview": "Sorvex Desktop is a tool used for hours beside an editor and a terminal, so the system is built to recede. The canvas is true black, the chrome (icon rail and sessions sidebar) sits one step above it as a single dark band, and raised surfaces (composer, menus, dialogs, user turns, the changed-files card) sit one more step up. Separation comes from 1px white hairlines at 6-16% opacity, not from fills, glows or shadows. Text carries the hierarchy through a six-step grey ink ladder; the agent's reply, in near-white body type, is the brightest thing in view.\n\nDensity is high but legible: 12-13px controls, 14px body, rows of 26-36px, tight 4-12px gaps. One accent, the logo blue, marks focus, caret, text selection, switches, links and the active marker in a provider rail. Primary actions are not blue; they are solid near-white on black. Other hues appear only to carry state (plan violet, security red, added green, warning amber), and almost always as text or a hairline tint rather than a fill.\n\nMotion is nearly absent. Hovers ease colour and background over 0.12-0.15s. The one ambient movement in the product is the working segment: while the agent runs, a short bright segment travels along the composer's top hairline. Reduced motion stops it. A light theme mirrors every token on a #fbfbfb canvas and must keep working.",
+    "keyCharacteristics": [
+      "True-black canvas, chrome one step up, raised surfaces one more step up.",
+      "Hairlines, not fills, separate regions.",
+      "Hierarchy through grey ink steps, not weight or colour.",
+      "One blue accent for focus and selection; primary buttons are solid near-white.",
+      "State hues as text or tinted hairlines only.",
+      "One moving thing: the working segment on the composer edge."
+    ],
+    "rules": [
+      {
+        "name": "The One Accent Rule",
+        "body": "Blue means \"this is where your input goes or what you picked\": focus, caret, selection, on-switch, link. A blue button, blue card, or blue icon at rest is off-system.",
+        "section": "colors"
+      },
+      {
+        "name": "The Near-White Primary Rule",
+        "body": "The primary action (send when ready, setup confirm, dialog confirm) is solid `ink-heading` on `canvas` text, hover mixing 14% toward black. In light theme it inverts to near-black on white.",
+        "section": "colors"
+      },
+      {
+        "name": "The State-As-Text Rule",
+        "body": "Mode and status hues colour text, an icon, or a hairline (at ~40% mix). Fills, when used, stay at 8-15% tint behind text of the same hue.",
+        "section": "colors"
+      },
+      {
+        "name": "The Mono-Means-Literal Rule",
+        "body": "Mono is reserved for values the machine produced or will read: paths, code, counts, commands. UI copy is never set in mono.",
+        "section": "typography"
+      },
+      {
+        "name": "The Grey-Not-Bold Rule",
+        "body": "Hierarchy steps down the ink ladder before it steps up in weight. 600 is for dialog and card titles; everything else is 400-500. No uppercase, no tracking-out on labels.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "Durations, percentages, counts, context sizes and shortcuts use tabular numerals so they don't jitter as they change.",
+        "section": "typography"
+      },
+      {
+        "name": "The Hairline-First Rule",
+        "body": "If a surface needs separating, add a 1px hairline before reaching for a fill change or a shadow. Cards and rows at rest have no shadow.",
+        "section": "elevation"
+      },
+      {
+        "name": "The One Mover Rule",
+        "body": "The working segment on the composer's top edge (35% wide gradient, 1.6s, `cubic-bezier(0.45, 0, 0.55, 1)`, infinite) is the only ambient animation. Progress bars and a pulsing record ring are functional exceptions; everything else is a 0.12-0.15s state transition.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do separate regions with 1px hairlines (`hairline-subtle` for dividers, `hairline` for controls, `hairline-overlay` for floating surfaces).",
+      "Do keep the canvas `#000`, chrome `#0a0a0b`, raised `#111112`; add depth by stepping surfaces, not by adding shadows.",
+      "Do make the primary action solid near-white on black, and reserve blue for focus, caret, selection, switches and links.",
+      "Do carry mode and status as coloured text or a ~40% hairline tint; when a fill is needed, an 8-15% tint behind same-hue text.",
+      "Do set paths, code, counts and commands in JetBrains Mono, with tabular numerals for anything that changes.",
+      "Do use hairline-separated rows for lists of choices (starters, checklists, skills) instead of a card per item.",
+      "Do honour `prefers-reduced-motion` for the working segment and pulse.",
+      "Do define every new colour in both `:root` and `:root.theme-light`."
+    ],
+    "donts": [
+      "Don't add glowing or gradient borders; the only gradient on an edge is the working segment, and only while the agent runs.",
+      "Don't fill buttons, cards or chips with the accent blue.",
+      "Don't add a second ambient animation; state transitions stay at 0.12-0.15s.",
+      "Don't use a logo hero or suggestion cards for empty states; the empty state is a question, a path and plain starter rows.",
+      "Don't set UI copy in uppercase or with letter-spacing, and don't place small labels above headings.",
+      "Don't use colours outside the token set; reference the custom properties."
+    ]
+  }
+}

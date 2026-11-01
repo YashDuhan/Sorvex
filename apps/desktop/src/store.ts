@@ -483,15 +483,19 @@ export function useSorvex() {
 	/** Loads everything about an agent that is already running. */
 	const hydrate = useCallback(async () => {
 		const session = await refreshState();
-		const [{ commands }] = await Promise.all([
+		const [{ commands }, server] = await Promise.all([
 			client.request<{ commands: SlashCommand[] }>({ type: "get_commands" }),
+			serverState(),
 			refreshModels(),
 			reloadMessages(),
 			refreshSessions(),
 		]);
 		// The extension publishes its tool list on session start; ask again in case that was missed.
 		void client.request({ type: "prompt", message: "/gui-refresh-models" }).catch(() => undefined);
-		dispatch({ type: "patch", patch: { connection: "ready", commands, isStreaming: session.isStreaming } });
+		// Dialogs opened before this window connected (or while it reloaded), e.g. an approval a phone also sees.
+		const approvals = server.dialogs.filter((d) => d.method === "select" && d.title === APPROVAL_TITLE).map((d) => parseApproval(d as Extract<DialogRequest, { method: "select" }>));
+		const dialogs = server.dialogs.filter((d) => !(d.method === "select" && d.title === APPROVAL_TITLE));
+		dispatch({ type: "patch", patch: { connection: "ready", commands, isStreaming: session.isStreaming, approvals, dialogs } });
 	}, [client, refreshState, refreshModels, reloadMessages, refreshSessions]);
 
 	const connect = useCallback(
@@ -571,6 +575,8 @@ export function useSorvex() {
 				dispatch({ type: "patch", patch: { connection: status.status, connectionError: status.error } });
 			}
 		});
+		// Answered elsewhere: another window or a paired phone (server/agent.ts).
+		const offResolved = serverEvents.on<{ id: string }>("dialog-resolved", ({ id }) => dispatch({ type: "dismiss_dialog", id }));
 		const offModels = serverEvents.on("models-changed", () => void refreshModels().then(refreshState).catch(() => undefined));
 		const offSpeaker = speaker.subscribe((speaking) => dispatch({ type: "voice", patch: { speaking } }));
 		// After the server restarts, the event stream reconnects; bring a missing agent back in the same folder.
@@ -590,6 +596,7 @@ export function useSorvex() {
 			offStderr();
 			offStatus();
 			offModels();
+			offResolved();
 			offSpeaker();
 		};
 	}, [client, connect, refreshState, refreshSessions, reloadMessages, refreshModels, runReviews, speakText]);

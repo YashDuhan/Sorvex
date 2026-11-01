@@ -1,14 +1,15 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Copy, Cpu, Info, KeyRound, MessageSquare, Minus, Plug, ScrollText, Server, Settings, Square, X } from "lucide-react";
+import { Copy, Cpu, Info, KeyRound, MessageSquare, Minus, Plug, ScrollText, Server, Settings, Sparkles, Square, X } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Connection } from "../store.ts";
 import { inTauri, useWindowControls } from "../window.ts";
 
-export type Page = "chat" | "mcp" | "ssh" | "providers" | "local" | "logs" | "settings" | "about";
+export type Page = "chat" | "mcp" | "skills" | "ssh" | "providers" | "local" | "logs" | "settings" | "about";
 
 const NAV: { page: Page; label: string; icon: ReactNode }[] = [
 	{ page: "chat", label: "Chat", icon: <MessageSquare size={18} /> },
 	{ page: "mcp", label: "MCP", icon: <Plug size={18} /> },
+	{ page: "skills", label: "Skills", icon: <Sparkles size={18} /> },
 	{ page: "ssh", label: "SSH", icon: <Server size={18} /> },
 	{ page: "providers", label: "Providers", icon: <KeyRound size={18} /> },
 	{ page: "local", label: "Local models", icon: <Cpu size={18} /> },

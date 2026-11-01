@@ -78,7 +78,7 @@ function LocalFirstReplyModal({ onClose }: { onClose: () => void }) {
 	);
 }
 
-function Modal({ title, onClose, children, wide, footer }: { title: ReactNode; onClose: () => void; children: ReactNode; wide?: boolean; footer?: ReactNode }) {
+export function Modal({ title, onClose, children, wide, footer }: { title: ReactNode; onClose: () => void; children: ReactNode; wide?: boolean; footer?: ReactNode }) {
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent) => event.key === "Escape" && onClose();
 		document.addEventListener("keydown", onKey);

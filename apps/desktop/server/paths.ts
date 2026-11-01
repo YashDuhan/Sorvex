@@ -17,5 +17,7 @@ export const distDir = join(appDir, "dist");
 export const desktopDir = join(getAgentDir(), "desktop");
 export const settingsPath = join(desktopDir, "settings.json");
 export const kokoroDir = join(desktopDir, "kokoro");
+/** Remote access settings, including the pairing secret (mode 0600). */
+export const remotePath = join(desktopDir, "remote.json");
 
 export const hasSourceCheckout = existsSync(cliPath);

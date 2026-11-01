@@ -6,6 +6,20 @@ import { bridgeExtension, cliPath, hasSourceCheckout, resolverUrl, settingsPath 
 
 export type AgentStatus = "stopped" | "starting" | "ready" | "exited" | "error";
 
+/** Extension dialogs that wait for an answer; tool approvals are `select` dialogs. */
+const DIALOG_METHODS = new Set(["select", "confirm", "input", "editor"]);
+/** Title the bridge extension uses for tool approvals (extension/gui-bridge.ts). */
+const APPROVAL_TITLE = "sorvex-gui:approval";
+
+export interface PendingDialog {
+	type: "extension_ui_request";
+	id: string;
+	method: string;
+	title?: string;
+	timeout?: number;
+	[key: string]: unknown;
+}
+
 interface Pending {
 	resolve: (data: unknown) => void;
 	reject: (error: Error) => void;
@@ -24,6 +38,11 @@ export class Agent {
 	private child: ChildProcessWithoutNullStreams | undefined;
 	private pending = new Map<string, Pending>();
 	private nextId = 0;
+	/**
+	 * Dialogs still waiting for an answer, so a window or phone that connects mid-run can show them. Every answer,
+	 * from any window, broadcasts `dialog-resolved` so the others close theirs.
+	 */
+	private dialogs = new Map<string, PendingDialog>();
 	private readonly hub: Hub;
 	/** Extra environment for the agent process, e.g. the SSH tool token. */
 	private readonly env: Record<string, string>;
@@ -35,6 +54,10 @@ export class Agent {
 
 	snapshot() {
 		return { status: this.status, cwd: this.cwd, launcher: this.launcher, error: this.error };
+	}
+
+	pendingDialogs(): PendingDialog[] {
+		return [...this.dialogs.values()];
 	}
 
 	/**
@@ -60,6 +83,7 @@ export class Agent {
 				: ["sorvex", args];
 
 		this.hub.clearSticky();
+		this.clearDialogs(() => true);
 		this.cwd = cwd;
 		this.launcher = `${command === process.execPath ? "node" : command} ${commandArgs.join(" ")}`;
 		this.error = undefined;
@@ -89,6 +113,7 @@ export class Agent {
 			this.child = undefined;
 			this.error = `Sorvex exited (code ${code ?? "?"})`;
 			this.rejectAll(this.error);
+			this.clearDialogs(() => true);
 			this.setStatus("exited");
 		});
 
@@ -120,6 +145,8 @@ export class Agent {
 	respond(response: Record<string, unknown>): void {
 		if (!this.child) throw new Error("Sorvex is not running");
 		writeLine(this.child, response);
+		const id = String(response.id);
+		if (this.dialogs.delete(id)) this.hub.broadcast("dialog-resolved", { id });
 	}
 
 	private onLine(line: string): void {
@@ -137,6 +164,7 @@ export class Agent {
 			else pending.reject(new Error(record.error ?? `${record.command} failed`));
 			return;
 		}
+		this.trackDialog(record as PendingDialog);
 		// Status, widgets and the tool list are announced once; keep the latest so a window that connects or
 		// reconnects later (for example while the server was still starting) still gets them.
 		const ui = record as { type?: string; method?: string; statusKey?: string; widgetKey?: string };
@@ -145,6 +173,30 @@ export class Agent {
 				? `${ui.method}:${ui.statusKey ?? ui.widgetKey}`
 				: undefined;
 		this.hub.broadcast("agent", record, sticky);
+	}
+
+	private trackDialog(record: PendingDialog): void {
+		if (record.type === "extension_ui_request" && DIALOG_METHODS.has(record.method)) {
+			const id = record.id;
+			this.dialogs.set(id, record);
+			// Sorvex cancels a dialog with a timeout by itself and sends nothing, so drop it then too.
+			if (record.timeout) {
+				setTimeout(() => {
+					if (this.dialogs.delete(id)) this.hub.broadcast("dialog-resolved", { id });
+				}, record.timeout).unref();
+			}
+		} else if ((record as { type?: string }).type === "agent_settled") {
+			// An aborted run cancels its open approvals without a record, like the GUI's own reducer assumes.
+			this.clearDialogs((dialog) => dialog.title === APPROVAL_TITLE);
+		}
+	}
+
+	private clearDialogs(match: (dialog: PendingDialog) => boolean): void {
+		for (const [id, dialog] of this.dialogs) {
+			if (!match(dialog)) continue;
+			this.dialogs.delete(id);
+			this.hub.broadcast("dialog-resolved", { id });
+		}
 	}
 
 	private rejectAll(reason: string): void {

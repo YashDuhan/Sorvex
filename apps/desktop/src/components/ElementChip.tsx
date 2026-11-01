@@ -1,6 +1,6 @@
 import { ChevronRight, MousePointer2, X } from "lucide-react";
 import { type CSSProperties, type ReactNode, useRef, useState } from "react";
-import { describeElement, type SelectedElement } from "../element.ts";
+import { describeElement, isDeviceElement, type SelectedElement } from "../element.ts";
 
 function Code({ children }: { children: string }) {
 	return <pre className="element-card-code">{children}</pre>;
@@ -34,7 +34,7 @@ export function ElementChip({ element, image, onRemove, align = "left" }: { elem
 	};
 
 	const details: [string, ReactNode][] = [];
-	if (element.path) details.push(["Selector", <Code key="path">{element.path}</Code>]);
+	if (element.path) details.push([isDeviceElement(element) ? "Resource id" : "Selector", <Code key="path">{element.path}</Code>]);
 	if (element.react) details.push(["React components", <Code key="react">{element.react}</Code>]);
 	if (Object.keys(element.styles).length > 0) {
 		details.push([
@@ -49,7 +49,7 @@ export function ElementChip({ element, image, onRemove, align = "left" }: { elem
 			</dl>,
 		]);
 	}
-	if (element.html) details.push(["HTML", <Code key="html">{element.html}</Code>]);
+	if (element.html) details.push([isDeviceElement(element) ? "Node" : "HTML", <Code key="html">{element.html}</Code>]);
 	if (element.siblings) details.push(["Siblings", <Code key="siblings">{element.siblings}</Code>]);
 	details.push(["Exact text sent", <Code key="exact">{describeElement({ ...element, hasScreenshot: Boolean(image) || element.hasScreenshot })}</Code>]);
 

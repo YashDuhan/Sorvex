@@ -1,9 +1,10 @@
-import { AlertCircle, BarChart3, Bug, FileSearch, ListTodo, Pencil, RotateCcw, ShieldCheck, Square, Terminal, Volume2 } from "lucide-react";
+import { AlertCircle, BarChart3, Pencil, RotateCcw, Square, Terminal, Volume2 } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { parseElements } from "../element.ts";
 import { compactNumber, duration } from "../format.ts";
 import type { AgentMessage, AssistantMessage, ImageContent, TextContent } from "../rpc.ts";
 import { type SorvexActions, indexToolResults, isToolCall, type State } from "../store.ts";
+import { ChangedFilesCard, type FileChange, turnChanges } from "./ChangedFiles.tsx";
 import { GuardrailResults } from "./Harness.tsx";
 import { PendingReply } from "./PendingReply.tsx";
 import { ElementChip } from "./ElementChip.tsx";
@@ -181,13 +182,50 @@ function MessageView({ message, userIndex, state, actions, live }: { message: Ag
 }
 
 const SUGGESTIONS = [
-	{ icon: <FileSearch size={14} />, title: "Explain this codebase", hint: "Map the packages and entry points", prompt: "Give me a tour of this codebase: the main packages, entry points, and how they fit together." },
-	{ icon: <Bug size={14} />, title: "Find a bug", hint: "Look for likely defects", prompt: "Look through the recent changes in this repo and point out anything that looks like a bug." },
-	{ icon: <ListTodo size={14} />, title: "Plan a change", hint: "Switches to plan mode", prompt: "/mode plan" },
-	{ icon: <ShieldCheck size={14} />, title: "Security review", hint: "Switches to security mode", prompt: "/mode security" },
+	{ title: "Explain this codebase", hint: "packages and entry points", prompt: "Give me a tour of this codebase: the main packages, entry points, and how they fit together." },
+	{ title: "Find a bug in recent changes", hint: "reads the git history", prompt: "Look through the recent changes in this repo and point out anything that looks like a bug." },
+	{ title: "Plan a change", hint: "switches to plan mode", prompt: "/mode plan" },
+	{ title: "Run a security review", hint: "switches to security mode", prompt: "/mode security" },
 ];
 
-export function Thread({ state, actions }: { state: State; actions: SorvexActions }) {
+/** Changed files per finished turn, keyed by the index of the turn's last assistant message. */
+function useTurnChanges(state: State): Map<number, FileChange[]> {
+	const { messages, isStreaming, cwd } = state;
+	return useMemo(() => {
+		const byEnd = new Map<number, FileChange[]>();
+		let start = -1;
+		let lastAssistant = -1;
+		const close = (end: number, finished: boolean) => {
+			if (start < 0 || lastAssistant < 0 || !finished) return;
+			const changes = turnChanges(messages, start, end, cwd);
+			if (changes.length > 0) byEnd.set(lastAssistant, changes);
+		};
+		messages.forEach((message, index) => {
+			if (message.role === "user") {
+				close(index - 1, true);
+				start = index;
+				lastAssistant = -1;
+			} else if (message.role === "assistant") {
+				lastAssistant = index;
+			}
+		});
+		close(messages.length - 1, !isStreaming);
+		return byEnd;
+	}, [messages, isStreaming, cwd]);
+}
+
+export function Thread({
+	state,
+	actions,
+	onOpenDiff,
+	onOpenFile,
+}: {
+	state: State;
+	actions: SorvexActions;
+	onOpenDiff?: () => void;
+	onOpenFile?: (path: string) => void;
+}) {
+	const changesByTurn = useTurnChanges(state);
 	const viewportRef = useRef<HTMLDivElement>(null);
 	const pinnedRef = useRef(true);
 
@@ -218,16 +256,12 @@ export function Thread({ state, actions }: { state: State; actions: SorvexAction
 		>
 			{!visible && state.connection === "ready" ? (
 				<div className="welcome">
-					<img src="/logo.svg" alt="" />
-					<h1>What should Sorvex work on?</h1>
-					<p>Coding and security agent, running in {state.cwd}</p>
+					<h1>What should we work on in {state.cwd.split(/[\\/]/).filter(Boolean).at(-1) ?? state.cwd}?</h1>
+					<p className="cwd">{state.cwd}</p>
 					<div className="suggestions">
 						{SUGGESTIONS.map((suggestion) => (
 							<button key={suggestion.title} type="button" className="suggestion" onClick={() => void actions.send(suggestion.prompt, false)}>
-								<span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-									{suggestion.icon}
-									{suggestion.title}
-								</span>
+								{suggestion.title}
 								<small>{suggestion.hint}</small>
 							</button>
 						))}
@@ -238,9 +272,11 @@ export function Thread({ state, actions }: { state: State; actions: SorvexAction
 					{state.messages.map((message, index) => {
 						if (message.role === "toolResult" || message.role === "system") return null;
 						if (message.role === "user") userCount++;
+						const changes = changesByTurn.get(index);
 						return (
 							<div key={`${message.timestamp}-${index}`} data-msg-index={index}>
 								<MessageView message={message} userIndex={userCount} state={state} actions={actions} live={message === lastAssistant} />
+								{changes && <ChangedFilesCard changes={changes} onOpenDiff={onOpenDiff} onOpenFile={onOpenFile} />}
 							</div>
 						);
 					})}

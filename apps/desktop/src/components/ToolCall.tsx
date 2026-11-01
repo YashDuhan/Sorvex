@@ -1,5 +1,5 @@
-import { AlertCircle, Brain, Check, ChevronRight, CornerDownRight, Hourglass, Loader, ShieldAlert, Wrench } from "lucide-react";
-import { useState } from "react";
+import { AlertCircle, Brain, Check, ChevronRight, CornerDownRight, Hourglass, Loader, Maximize2, ShieldAlert, Wrench, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { duration, resultText, stringify } from "../format.ts";
 import type { ThinkingContent, ToolCall, ToolResultMessage } from "../rpc.ts";
 import type { ReviewIssue } from "../review.ts";
@@ -89,9 +89,15 @@ function resultImages(result: unknown): { data: string; mimeType: string }[] {
 	);
 }
 
-/** Inline result images; click one to see it full size. */
+/** Result images as small thumbnails in the tool row; click one (or press Enter on it) to see it full size. */
 function ResultImages({ images }: { images: { data: string; mimeType: string }[] }) {
 	const [zoomed, setZoomed] = useState<string | null>(null);
+	useEffect(() => {
+		if (!zoomed) return;
+		const onKey = (event: KeyboardEvent) => event.key === "Escape" && setZoomed(null);
+		document.addEventListener("keydown", onKey);
+		return () => document.removeEventListener("keydown", onKey);
+	}, [zoomed]);
 	if (images.length === 0) return null;
 	return (
 		<>
@@ -101,13 +107,19 @@ function ResultImages({ images }: { images: { data: string; mimeType: string }[]
 					return (
 						<button key={index} type="button" className="tool-image" title="Open full size" onClick={() => setZoomed(src)}>
 							<img src={src} alt={`Tool result ${index + 1}`} />
+							<span className="tool-image-expand" aria-hidden="true">
+								<Maximize2 size={12} />
+							</span>
 						</button>
 					);
 				})}
 			</div>
 			{zoomed && (
-				<div className="modal-backdrop image-zoom" onMouseDown={() => setZoomed(null)}>
+				<div className="modal-backdrop image-zoom" role="dialog" aria-modal="true" aria-label="Tool result, full size" onMouseDown={() => setZoomed(null)}>
 					<img src={zoomed} alt="Tool result, full size" />
+					<button type="button" className="icon-btn image-zoom-close" aria-label="Close" onClick={() => setZoomed(null)}>
+						<X size={16} />
+					</button>
 				</div>
 			)}
 		</>

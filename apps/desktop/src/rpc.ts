@@ -258,6 +258,7 @@ export function listSessions(cwd: string, all = false): Promise<SessionSummary[]
 	return api<SessionSummary[]>("GET", `/api/sessions?cwd=${encodeURIComponent(cwd)}${all ? "&all=1" : ""}`);
 }
 
-export async function serverState(): Promise<{ agent: AgentStatus; defaultCwd: string }> {
+/** `dialogs`: extension dialogs and tool approvals still waiting for an answer. */
+export async function serverState(): Promise<{ agent: AgentStatus; defaultCwd: string; dialogs: DialogRequest[] }> {
 	return api("GET", "/api/state");
 }
