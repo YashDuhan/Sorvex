@@ -44,7 +44,9 @@ export type BrowserAction =
 	| { action: "press"; key: string }
 	| { action: "scroll"; dy: number }
 	| { action: "wait"; ms?: number; text?: string }
-	| { action: "tabs"; op: "list" | "new" | "switch" | "close"; id?: number; url?: string };
+	| { action: "tabs"; op: "list" | "new" | "switch" | "close"; id?: number; url?: string }
+	/** `preset` is a VIEWPORT_PRESETS id, "responsive" (follow the Browser pane) or "list"; or a custom width and height. */
+	| { action: "viewport"; preset?: string; width?: number; height?: number };
 
 export interface BrowserTab {
 	id: number;
@@ -60,6 +62,36 @@ export type BrowserDecision = { decision: "allow" | "ask" | "block"; reason?: st
 const profileDir = join(desktopDir, "browser");
 /** Screencast frames are capped at this size; the page itself follows the Browser pane's size (see resize()). */
 const MAX_FRAME = { width: 3840, height: 2160 };
+const MIN_VIEWPORT = { width: 240, height: 240 };
+
+export interface ViewportPreset {
+	id: string;
+	label: string;
+	category: "Desktop" | "Tablet" | "Phone";
+	width: number;
+	height: number;
+}
+
+/** Common screen sizes in CSS pixels; the phone and tablet ones are Chrome DevTools' device list. */
+export const VIEWPORT_PRESETS: ViewportPreset[] = [
+	{ id: "desktop-1920", label: "Desktop 1920", category: "Desktop", width: 1920, height: 1080 },
+	{ id: "desktop-1440", label: "Desktop 1440", category: "Desktop", width: 1440, height: 900 },
+	{ id: "laptop-1366", label: "Laptop 1366", category: "Desktop", width: 1366, height: 768 },
+	{ id: "laptop-1280", label: "Laptop 1280", category: "Desktop", width: 1280, height: 800 },
+	{ id: "ipad-pro", label: "iPad Pro", category: "Tablet", width: 1024, height: 1366 },
+	{ id: "ipad-air", label: "iPad Air", category: "Tablet", width: 820, height: 1180 },
+	{ id: "ipad-mini", label: "iPad Mini", category: "Tablet", width: 768, height: 1024 },
+	{ id: "surface-pro-7", label: "Surface Pro 7", category: "Tablet", width: 912, height: 1368 },
+	{ id: "iphone-14-pro-max", label: "iPhone 14 Pro Max", category: "Phone", width: 430, height: 932 },
+	{ id: "iphone-12-pro", label: "iPhone 12 Pro", category: "Phone", width: 390, height: 844 },
+	{ id: "iphone-xr", label: "iPhone XR", category: "Phone", width: 414, height: 896 },
+	{ id: "iphone-se", label: "iPhone SE", category: "Phone", width: 375, height: 667 },
+	{ id: "pixel-7", label: "Pixel 7", category: "Phone", width: 412, height: 915 },
+	{ id: "galaxy-s8-plus", label: "Samsung Galaxy S8+", category: "Phone", width: 360, height: 740 },
+];
+
+/** "responsive" follows the Browser pane's size; "fixed" keeps the page at one size (a preset or custom). */
+export type ViewportSetting = { mode: "responsive" } | { mode: "fixed"; presetId: string | null; width: number; height: number };
 
 function findChromium(): string {
 	const candidates = [process.env.SORVEX_BROWSER_PATH, "/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome-stable", "/opt/google/chrome/chrome"];
@@ -207,8 +239,11 @@ export class BrowserManager {
 	private starting: Promise<Page> | undefined;
 	private viewing = false;
 	private lastFrame: string | undefined;
-	/** Page viewport in CSS pixels. Follows the Browser pane, so pages reflow (down to their mobile layout) as it shrinks. */
+	/** Page viewport in CSS pixels: the Browser pane's size while responsive, else the fixed viewport. */
 	private size = { width: 1280, height: 800 };
+	/** The Browser pane's size, kept while a fixed viewport is set so "responsive" can return to it. */
+	private paneSize = { width: 1280, height: 800 };
+	private viewport: ViewportSetting = { mode: "responsive" };
 	private readonly consoleLog: ConsoleEntry[] = [];
 	private readonly visitedHosts = new Set<string>();
 	private readonly activity: ActivityEntry[] = [];
@@ -223,7 +258,15 @@ export class BrowserManager {
 	}
 
 	status() {
-		return { running: this.page !== undefined, url: this.page?.url() ?? "", frame: this.lastFrame, activity: [...this.activity].reverse(), guardrails: browserGuardrails() };
+		return {
+			running: this.page !== undefined,
+			url: this.page?.url() ?? "",
+			frame: this.lastFrame,
+			activity: [...this.activity].reverse(),
+			guardrails: browserGuardrails(),
+			viewport: this.viewport,
+			presets: VIEWPORT_PRESETS,
+		};
 	}
 
 	private log(entry: Omit<ActivityEntry, "at">): void {
@@ -374,9 +417,44 @@ export class BrowserManager {
 		}
 	}
 
-	/** Sets every tab's viewport to the Browser pane's size, so the page lays itself out for that width. */
+	/** The Browser pane's new size. Responsive, every tab takes it, so the page lays itself out for that width. */
 	async resize(width: number, height: number): Promise<void> {
-		const size = { width: Math.round(Math.min(Math.max(width, 320), MAX_FRAME.width)), height: Math.round(Math.min(Math.max(height, 240), MAX_FRAME.height)) };
+		this.paneSize = { width: Math.round(Math.min(Math.max(width, 320), MAX_FRAME.width)), height: Math.round(Math.min(Math.max(height, 240), MAX_FRAME.height)) };
+		if (this.viewport.mode === "responsive") await this.applySize(this.paneSize);
+	}
+
+	/** Sets the viewport to a preset, a custom size, or back to responsive, and tells the Browser pane. */
+	async setViewport(input: { preset?: string; width?: number; height?: number }): Promise<string> {
+		const preset = input.preset?.trim().toLowerCase();
+		if (preset === "responsive" || (!preset && input.width === undefined && input.height === undefined)) {
+			this.viewport = { mode: "responsive" };
+		} else if (preset) {
+			const found = VIEWPORT_PRESETS.find((entry) => entry.id === preset || entry.label.toLowerCase() === preset);
+			if (!found) throw new Error(`Unknown viewport preset "${input.preset}". Presets: responsive, ${VIEWPORT_PRESETS.map((entry) => entry.id).join(", ")}`);
+			this.viewport = { mode: "fixed", presetId: found.id, width: found.width, height: found.height };
+		} else {
+			const width = Math.round(Number(input.width));
+			const height = Math.round(Number(input.height));
+			if (!(width >= MIN_VIEWPORT.width && width <= MAX_FRAME.width && height >= MIN_VIEWPORT.height && height <= MAX_FRAME.height)) {
+				throw new Error(`Width and height must be between ${MIN_VIEWPORT.width} and ${MAX_FRAME.width} by ${MIN_VIEWPORT.height} and ${MAX_FRAME.height}`);
+			}
+			this.viewport = { mode: "fixed", presetId: null, width, height };
+		}
+		await this.applySize(this.viewport.mode === "fixed" ? this.viewport : this.paneSize);
+		this.hub.broadcast("browser-viewport", this.viewport);
+		return this.describeViewport();
+	}
+
+	private describeViewport(): string {
+		const viewport = this.viewport;
+		if (viewport.mode === "responsive") return `Viewport: responsive (follows the Browser pane, now ${this.size.width}x${this.size.height})`;
+		const preset = VIEWPORT_PRESETS.find((entry) => entry.id === viewport.presetId);
+		return `Viewport: ${preset ? `${preset.label} ` : "custom "}${viewport.width}x${viewport.height}`;
+	}
+
+	/** Sets every tab's viewport to `next`; only the visible tab is waited for. */
+	private async applySize(next: { width: number; height: number }): Promise<void> {
+		const size = { width: next.width, height: next.height };
 		if (size.width === this.size.width && size.height === this.size.height) return;
 		this.size = size;
 		// Only the visible tab is waited for; background tabs follow without delaying the next resize.
@@ -468,6 +546,20 @@ export class BrowserManager {
 	private async perform(input: BrowserAction): Promise<{ text: string; image?: string }> {
 		// Closing a tab must not start a stopped browser just to close something that is already gone.
 		if (input.action === "tabs" && input.op === "close" && !this.context) return { text: "No tabs." };
+		// The viewport needs no running browser: it applies when one starts.
+		if (input.action === "viewport") {
+			if (input.preset?.trim().toLowerCase() === "list") {
+				return {
+					text: [
+						this.describeViewport(),
+						"Presets (id: width x height):",
+						"responsive: follows the Browser pane",
+						...VIEWPORT_PRESETS.map((entry) => `${entry.id}: ${entry.width}x${entry.height} (${entry.category}, ${entry.label})`),
+					].join("\n"),
+				};
+			}
+			return { text: `${await this.setViewport(input)}. Take browser_screenshot to see the page at this size.` };
+		}
 		const page = await this.ensure();
 		const settle = () => page.waitForLoadState("domcontentloaded", { timeout: 8000 }).catch(() => undefined);
 		switch (input.action) {

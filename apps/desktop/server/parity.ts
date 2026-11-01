@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { copyFileSync, existsSync, readFileSync, unlinkSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { getAgentDir, SessionManager, SettingsManager } from "@sorvex/coding-agent";
 import { ProjectTrustStore } from "@sorvex/coding-agent/core/trust-manager.js";
@@ -30,6 +30,7 @@ export function readSorvexSettings(cwd: string) {
 		defaultProjectTrust: settings.getDefaultProjectTrust(),
 		doubleEscapeAction: settings.getDoubleEscapeAction(),
 		compactionEnabled: settings.getCompactionEnabled(),
+		retryEnabled: settings.getRetryEnabled(),
 		enabledModels: settings.getEnabledModels() ?? [],
 		defaultThinkingLevel: settings.getDefaultThinkingLevel() ?? null,
 		defaultModel: settings.getDefaultProvider() && settings.getDefaultModel() ? `${settings.getDefaultProvider()}/${settings.getDefaultModel()}` : null,
@@ -64,6 +65,9 @@ export async function writeSorvexSetting(cwd: string, key: string, value: unknow
 		case "compactionEnabled":
 			settings.setCompactionEnabled(Boolean(value));
 			break;
+		case "retryEnabled":
+			settings.setRetryEnabled(Boolean(value));
+			break;
 		case "enabledModels":
 			settings.setEnabledModels(Array.isArray(value) && value.length > 0 ? (value as string[]) : undefined);
 			break;
@@ -95,7 +99,8 @@ export async function listSessions(cwd: string, all: boolean) {
 			cwd: session.cwd,
 			name: session.name ?? null,
 			firstMessage: session.firstMessage || null,
-			modified: session.modified.getTime(),
+			// A fork keeps its source's message times; its creation time puts it at the top of the list instead.
+			modified: Math.max(session.modified.getTime(), session.created.getTime()),
 			messageCount: session.messageCount,
 		}))
 		.sort((a, b) => b.modified - a.modified);
@@ -117,6 +122,22 @@ export async function deleteSession(path: string): Promise<{ trashed: boolean }>
 	}
 	unlinkSync(path);
 	return { trashed: false };
+}
+
+/** Names a session that is not open in the agent; the open one is renamed over RPC so the agent's copy stays current. */
+export function renameSession(path: string, name: string): { ok: true } {
+	if (!path.startsWith(join(agentDir, "sessions")) || !path.endsWith(".jsonl") || !existsSync(path)) throw new Error("Not a session file");
+	SessionManager.open(path).appendSessionInfo(name);
+	return { ok: true };
+}
+
+/** Copies a session that is not open in the agent into a new session beside it, named `name`. */
+export function forkSession(path: string, name: string): { path: string; cwd: string } {
+	if (!path.startsWith(join(agentDir, "sessions")) || !path.endsWith(".jsonl") || !existsSync(path)) throw new Error("Not a session file");
+	const source = SessionManager.open(path);
+	const fork = SessionManager.forkFrom(path, source.getCwd(), dirname(path));
+	fork.appendSessionInfo(name);
+	return { path: fork.getSessionFile() ?? "", cwd: fork.getCwd() };
 }
 
 export function exportJsonl(sessionFile: string, target: string): { path: string } {

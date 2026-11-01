@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import { api, serverEvents } from "./api.ts";
 import { describeElement, type SelectedElement } from "./element.ts";
 import { rememberModel } from "./components/ModelPicker.tsx";
+import { sessionTitle } from "./components/ThreadList.tsx";
 import { buildReviewRequest, parseIssues, type ReviewIssue } from "./review.ts";
 import {
 	type AgentEvent,
@@ -130,7 +131,6 @@ export interface State {
 	toasts: Toast[];
 	/** Text pushed into the composer; `append` adds to what is there (dictation). */
 	editorText?: { text: string; nonce: number; append?: boolean };
-	logs: string[];
 	settings?: DesktopSettings;
 	/** Guardrail reviews keyed by the reviewed assistant message's timestamp, then by reviewer name. */
 	reviews: Record<number, Record<string, ReviewResult>>;
@@ -164,7 +164,6 @@ const initialState: State = {
 	dialogs: [],
 	approvals: [],
 	toasts: [],
-	logs: [],
 	reviews: {},
 	annotations: [],
 	voice: { dictating: false, voiceChat: false, transcribing: false, speaking: false },
@@ -179,8 +178,7 @@ type Action =
 	| { type: "review"; key: number; reviewer: string; result: ReviewResult }
 	| { type: "toast"; kind: Toast["kind"]; text: string }
 	| { type: "dismiss_toast"; id: number }
-	| { type: "dismiss_dialog"; id: string }
-	| { type: "log"; line: string };
+	| { type: "dismiss_dialog"; id: string };
 
 let toastId = 0;
 let annotationId = 0;
@@ -384,8 +382,6 @@ function reducer(state: State, action: Action): State {
 				dialogs: state.dialogs.filter((dialog) => dialog.id !== action.id),
 				approvals: state.approvals.filter((approval) => approval.requestId !== action.id),
 			};
-		case "log":
-			return { ...state, logs: [...state.logs, action.line].slice(-500) };
 	}
 }
 
@@ -428,6 +424,9 @@ function formatAnnotations(annotations: Annotation[]): string {
 		.map((annotation, index) => `${index + 1}. "${annotation.quote}"${annotation.comment ? `\n   ${annotation.comment}` : ""}`)
 		.join("\n");
 }
+
+/** "<title> (fork)", without stacking the suffix when forking a fork. */
+const forkName = (title: string) => `${title.replace(/ \(fork\)$/, "")} (fork)`;
 
 export function useSorvex() {
 	const [state, dispatch] = useReducer(reducer, initialState);
@@ -569,7 +568,6 @@ export function useSorvex() {
 				void refreshModels().catch(() => undefined);
 			}
 		});
-		const offStderr = client.onStderr((line) => dispatch({ type: "log", line }));
 		const offStatus = client.onStatus((status) => {
 			if (status.status === "exited" || status.status === "error") {
 				dispatch({ type: "patch", patch: { connection: status.status, connectionError: status.error } });
@@ -593,7 +591,6 @@ export function useSorvex() {
 		return () => {
 			offOpen();
 			offEvent();
-			offStderr();
 			offStatus();
 			offModels();
 			offResolved();
@@ -675,6 +672,21 @@ export function useSorvex() {
 		[client, refreshState, reloadMessages, refreshSessions],
 	);
 
+	const openSessionAt = useCallback(
+		async (sessionPath: string, sessionCwd?: string) => {
+			const result = await client.request<{ cancelled: boolean }>({ type: "switch_session", sessionPath });
+			if (result?.cancelled) return;
+			if (sessionCwd && sessionCwd !== cwdRef.current) {
+				await api("POST", "/api/agent/cwd", { cwd: sessionCwd });
+				cwdRef.current = sessionCwd;
+				dispatch({ type: "patch", patch: { cwd: sessionCwd } });
+			}
+			dispatch({ type: "patch", patch: { reviews: {}, widgets: {} } });
+			await Promise.all([refreshState(), reloadMessages()]);
+		},
+		[client, refreshState, reloadMessages],
+	);
+
 	const stopVoice = useCallback(() => {
 		micRef.current?.stop();
 		micRef.current = null;
@@ -699,17 +711,47 @@ export function useSorvex() {
 			 * Opens a session from any folder without restarting Sorvex: `switch_session` rebuilds the session in its
 			 * own folder, so only the GUI's notion of the current folder needs to follow.
 			 */
-			openSession: (sessionPath: string, sessionCwd?: string) =>
+			openSession: (sessionPath: string, sessionCwd?: string) => run(() => openSessionAt(sessionPath, sessionCwd)),
+			/**
+			 * The sidebar's Fork: copies the whole session into a new one named "<title> (fork)" and opens it. The open
+			 * session is cloned over RPC so its current branch is what gets copied.
+			 */
+			forkSession: (path: string) =>
 				run(async () => {
-					const result = await client.request<{ cancelled: boolean }>({ type: "switch_session", sessionPath });
-					if (result?.cancelled) return;
-					if (sessionCwd && sessionCwd !== cwdRef.current) {
-						await api("POST", "/api/agent/cwd", { cwd: sessionCwd });
-						cwdRef.current = sessionCwd;
-						dispatch({ type: "patch", patch: { cwd: sessionCwd } });
+					const summary = stateRef.current.sessions.find((session) => session.path === path);
+					const name = forkName(summary ? sessionTitle(summary) : "Session");
+					if (path === stateRef.current.session?.sessionFile) {
+						const { cancelled } = await client.request<{ cancelled: boolean }>({ type: "clone" });
+						if (cancelled) return;
+						await client.request({ type: "set_session_name", name });
+						await Promise.all([refreshState(), reloadMessages(), refreshSessions()]);
+					} else {
+						const fork = await api<{ path: string; cwd: string }>("POST", "/api/sessions/fork", { path, name });
+						await openSessionAt(fork.path, fork.cwd);
+						await refreshSessions();
 					}
+					toast("info", "Forked into a new session");
+				}),
+			/**
+			 * "Fork from here" under a reply: a new session holding everything up to the end of that reply's turn, i.e.
+			 * branched just before the next user message, or a clone when the reply is the latest. `userIndex` is the
+			 * index of the user message the reply answers (-1 before any).
+			 */
+			forkFromReply: (userIndex: number) =>
+				run(async () => {
+					const current = stateRef.current;
+					const summary = current.sessions.find((session) => session.path === current.session?.sessionFile);
+					const name = forkName(current.session?.sessionName || (summary ? sessionTitle(summary) : "Session"));
+					const { messages } = await client.request<{ messages: { entryId: string; text: string }[] }>({ type: "get_fork_messages" });
+					const next = messages[userIndex + 1];
+					const { cancelled } = next
+						? await client.request<{ cancelled: boolean }>({ type: "fork", entryId: next.entryId })
+						: await client.request<{ cancelled: boolean }>({ type: "clone" });
+					if (cancelled) return;
+					await client.request({ type: "set_session_name", name });
 					dispatch({ type: "patch", patch: { reviews: {}, widgets: {} } });
-					await Promise.all([refreshState(), reloadMessages()]);
+					await Promise.all([refreshState(), reloadMessages(), refreshSessions()]);
+					toast("info", "Forked into a new session");
 				}),
 			/** A new chat in `folder`: a fresh session here, or Sorvex restarted in another folder. */
 			newChatIn: (folder: string) =>
@@ -725,10 +767,16 @@ export function useSorvex() {
 					dispatch({ type: "patch", patch: { reviews: {}, widgets: {} } });
 					await Promise.all([refreshState(), reloadMessages()]);
 				}),
-			renameSession: (name: string) =>
+			/** Renames the open session, or the session file at `path` (the sidebar's Rename). */
+			renameSession: (name: string, path?: string) =>
 				run(async () => {
-					await client.request({ type: "set_session_name", name });
-					await Promise.all([refreshState(), refreshSessions()]);
+					if (!path || path === stateRef.current.session?.sessionFile) {
+						await client.request({ type: "set_session_name", name });
+						await Promise.all([refreshState(), refreshSessions()]);
+					} else {
+						await api("POST", "/api/sessions/rename", { path, name });
+						await refreshSessions();
+					}
 				}),
 			/**
 			 * Reloads the agent's model catalog (credentials, local llama.cpp models) and returns the new list. With
@@ -790,7 +838,6 @@ export function useSorvex() {
 					await client.respondUi(response);
 				}),
 			dismissDialog: (id: string) => dispatch({ type: "dismiss_dialog", id }),
-			clearLogs: () => dispatch({ type: "patch", patch: { logs: [] } }),
 			setComposerText: (text: string, append = false) =>
 				dispatch({ type: "patch", patch: { editorText: { text, nonce: Date.now(), append } } }),
 			saveSettings: (settings: DesktopSettings) =>
@@ -948,7 +995,7 @@ export function useSorvex() {
 			refreshSessions,
 			refreshModels,
 		}),
-		[client, connect, toast, run, send, hydrate, refreshState, reloadMessages, refreshSessions, refreshModels, forkAt, speakText, stopVoice],
+		[client, connect, toast, run, send, hydrate, refreshState, reloadMessages, refreshSessions, refreshModels, forkAt, openSessionAt, speakText, stopVoice],
 	);
 
 	return { state, actions };

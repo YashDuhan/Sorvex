@@ -5,6 +5,8 @@
  *   shows inline above the composer (Allow once / Allow always / Deny).
  * - Safety rules: regex rules over bash commands and file paths that either ask or block, checked before
  *   tool permissions, so a rule can stop a call even when its tool is allowed.
+ * - Approval mode: "edits" also allows file edits, "auto" allows every tool set to Ask unless a rule asks, and
+ *   "full" asks for nothing. Block rules and Deny hold in every mode.
  * - `/gui-refresh-models`: rebuilds the available-model list after the GUI changes credentials.
  * - `/gui-reload`: reloads the session so MCP config edits take effect.
  * - Redacts credentials (tokens, keys, passwords in URLs or NAME=value pairs) from every tool result before the
@@ -35,6 +37,8 @@ interface SafetyRule {
 }
 
 interface Settings {
+	/** supervised | edits | auto | full; see ApprovalMode in src/settings.ts. */
+	approvalMode?: "supervised" | "edits" | "auto" | "full";
 	permissions?: { default?: Permission; tools?: Record<string, Permission> };
 	rules?: SafetyRule[];
 	[key: string]: unknown;
@@ -64,6 +68,8 @@ async function askApproval(ctx: ExtensionContext, key: string, options: string[]
 }
 
 const PATH_TOOLS = new Set(["read", "write", "edit", "grep", "find", "ls"]);
+/** Tools "Auto-accept edits" approves: the ones that change files. */
+const EDIT_TOOLS = new Set(["edit", "write"]);
 
 const desktopUrl = process.env.SORVEX_DESKTOP_URL;
 /**
@@ -182,6 +188,7 @@ export default function guiBridge(pi: ExtensionAPI): void {
 		if (event.toolName === "ssh_exec" || event.toolName === "ssh_hosts" || event.toolName.startsWith("browser_")) return undefined;
 		const settings = loadSettings();
 		const input = event.input as Record<string, unknown>;
+		const mode = settings.approvalMode ?? "supervised";
 
 		let askReason: string | undefined;
 		let askRule: string | undefined;
@@ -193,12 +200,16 @@ export default function guiBridge(pi: ExtensionAPI): void {
 				ctx.ui.notify(`Guardrail "${rule.name}" blocked ${event.toolName}`, "warning");
 				return { block: true, reason: `Blocked by guardrail "${rule.name}". Do not retry this; ask the user instead.` };
 			}
+			// Full access asks for nothing; block rules above still apply.
+			if (mode === "full") continue;
 			askReason ??= `Guardrail "${rule.name}" requires approval`;
 			askRule ??= rule.id;
 		}
 
 		const permissions = settings.permissions ?? {};
-		const permission = permissions.tools?.[event.toolName] ?? permissions.default ?? "allow";
+		let permission = permissions.tools?.[event.toolName] ?? permissions.default ?? "allow";
+		// The approval mode can only loosen "ask"; a tool set to Deny stays denied.
+		if (permission === "ask" && (mode === "auto" || mode === "full" || (mode === "edits" && EDIT_TOOLS.has(event.toolName)))) permission = "allow";
 		if (permission === "deny") {
 			return { block: true, reason: `Tool "${event.toolName}" is denied by the user's tool permissions.` };
 		}
@@ -380,6 +391,14 @@ function registerBrowserTools(pi: ExtensionAPI): void {
 		"Take a screenshot of the current page and return it as an image. Set show to true only when the user should see this image in the chat, e.g. they asked for a screenshot or it shows the result they asked for. Leave it false for screenshots you take to inspect the page yourself.",
 		Type.Object({ show: Type.Optional(Type.Boolean()) }),
 		(p) => ({ action: "screenshot", show: p.show === true }),
+	);
+	tool(
+		"browser_viewport",
+		"Set the page's viewport size, e.g. to check a responsive layout: then take browser_screenshot at each size. preset: a device id such as iphone-12-pro, pixel-7, ipad-air or desktop-1440, " +
+			'"list" to list every preset and the current viewport, or "responsive" to follow the Browser pane again; or give width and height in CSS pixels for a custom size. ' +
+			"The user sees the same viewport, so set it back to responsive when you are done unless they asked to keep it.",
+		Type.Object({ preset: Type.Optional(Type.String()), width: Type.Optional(Type.Number()), height: Type.Optional(Type.Number()) }),
+		(p) => ({ action: "viewport", preset: p.preset, width: p.width, height: p.height }),
 	);
 	tool("browser_back", "Go back to the previous page.", Type.Object({}), () => ({ action: "back" }));
 	tool(

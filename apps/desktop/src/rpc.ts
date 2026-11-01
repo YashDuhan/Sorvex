@@ -237,10 +237,6 @@ export class AgentClient {
 		return serverEvents.on("agent", listener);
 	}
 
-	onStderr(listener: (line: string) => void): () => void {
-		return serverEvents.on<{ line: string }>("agent-stderr", ({ line }) => listener(line));
-	}
-
 	onStatus(listener: (status: AgentStatus) => void): () => void {
 		return serverEvents.on("agent-status", listener);
 	}

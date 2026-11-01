@@ -85,7 +85,7 @@ export class Kokoro {
 				this.hub.broadcast("kokoro", { streamId: record.id, done: true, error: record.success ? undefined : record.error });
 			}
 		});
-		readLines(child.stderr, (line) => this.hub.broadcast("agent-stderr", { line: `[kokoro] ${line}` }));
+		readLines(child.stderr, (line) => console.error(`[kokoro] ${line}`));
 		child.on("exit", () => {
 			if (this.child === child) this.child = undefined;
 		});

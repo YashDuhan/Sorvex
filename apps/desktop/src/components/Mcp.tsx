@@ -4,6 +4,7 @@ import { api } from "../api.ts";
 import type { Permission } from "../settings.ts";
 import type { SorvexActions, State } from "../store.ts";
 import { PageHeader } from "./Chrome.tsx";
+import { ComposioView } from "./Composio.tsx";
 import { Switch } from "./Pages.tsx";
 import { Select } from "./Select.tsx";
 
@@ -305,7 +306,7 @@ function ToolListSidebar({ servers, state, actions }: { servers: McpServer[]; st
 export function McpPage({ state, actions }: { state: State; actions: SorvexActions }) {
 	const [report, setReport] = useState<McpReport | null>(null);
 	const [loading, setLoading] = useState(false);
-	const [view, setView] = useState<"servers" | "json">("servers");
+	const [view, setView] = useState<"servers" | "composio" | "json">("servers");
 	const [adding, setAdding] = useState<{ template?: Template } | null>(null);
 	const [json, setJson] = useState<{ path: string; text: string } | null>(null);
 
@@ -333,6 +334,9 @@ export function McpPage({ state, actions }: { state: State; actions: SorvexActio
 						<button type="button" className={view === "servers" ? "on" : ""} onClick={() => setView("servers")}>
 							Servers
 						</button>
+						<button type="button" className={view === "composio" ? "on" : ""} onClick={() => setView("composio")}>
+							Composio
+						</button>
 						<button type="button" className={view === "json" ? "on" : ""} onClick={() => setView("json")}>
 							JSON
 						</button>
@@ -354,7 +358,7 @@ export function McpPage({ state, actions }: { state: State; actions: SorvexActio
 			/>
 			<div className="mcp-page">
 				<div className="mcp-main">
-					{report && report.servers.length > 0 && (
+					{view !== "composio" && report && report.servers.length > 0 && (
 						<div className="mcp-summary">
 							<span>
 								<b>{report.servers.length}</b> server{report.servers.length === 1 ? "" : "s"}
@@ -368,7 +372,9 @@ export function McpPage({ state, actions }: { state: State; actions: SorvexActio
 							<span className="mono mcp-path">{report.globalPath}</span>
 						</div>
 					)}
-					{view === "servers" ? (
+					{view === "composio" ? (
+						<ComposioView actions={actions} onChanged={load} />
+					) : view === "servers" ? (
 						<div className="mcp-list">
 							{adding && report && (
 								<AddServerForm

@@ -100,7 +100,7 @@ export class Agent {
 			if (this.child === child) this.onLine(line);
 		});
 		readLines(child.stderr, (line) => {
-			if (this.child === child) this.hub.broadcast("agent-stderr", { line });
+			if (this.child === child) console.error(`[agent] ${line}`);
 		});
 		child.on("error", (error) => {
 			if (this.child !== child) return;
@@ -154,7 +154,7 @@ export class Agent {
 		try {
 			record = JSON.parse(line);
 		} catch {
-			this.hub.broadcast("agent-stderr", { line });
+			console.error(`[agent] ${line}`);
 			return;
 		}
 		if (record.type === "response" && record.id && this.pending.has(record.id)) {

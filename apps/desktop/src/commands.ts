@@ -79,7 +79,7 @@ export const HOTKEYS: { group: string; keys: [string, string][] }[] = [
 			["Ctrl+O", "Expand or collapse all tool output"],
 			["Ctrl+T", "Show or hide thinking blocks"],
 			["Alt+T", "Show or hide the todos panel"],
-			["Ctrl+Shift+F", "Search the conversation"],
+			["Ctrl+F", "Find in the conversation"],
 			["Ctrl+N", "New session"],
 		],
 	},

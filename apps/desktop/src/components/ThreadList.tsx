@@ -1,5 +1,5 @@
-import { ChevronRight, FolderPlus, Plus, RefreshCw, SearchIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ChevronRight, Ellipsis, FolderPlus, Pencil, Plus, RefreshCw, SearchIcon, Split, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { relativeTime } from "../format.ts";
 import type { SessionSummary } from "../rpc.ts";
 
@@ -23,6 +23,135 @@ function loadCollapsed(): Record<string, boolean> {
 	}
 }
 
+/**
+ * One session in the sidebar. The "..." button (shown on hover) opens Rename, Fork and Delete; Rename, or a double-click on
+ * the title, turns the title into a field in place: Enter or clicking away saves, Escape cancels.
+ */
+function ThreadRow({
+	session,
+	active,
+	running,
+	onPick,
+	onRename,
+	onFork,
+	onDelete,
+}: {
+	session: SessionSummary;
+	active: boolean;
+	running: boolean;
+	onPick: () => void;
+	onRename: (name: string) => void;
+	onFork: () => void;
+	onDelete: () => void;
+}) {
+	const title = sessionTitle(session);
+	const [editing, setEditing] = useState(false);
+	const [menu, setMenu] = useState<{ top: number; left: number } | null>(null);
+	const menuRef = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		if (!menu) return;
+		const close = (event: Event) => {
+			if (event instanceof KeyboardEvent ? event.key === "Escape" : !menuRef.current?.contains(event.target as Node)) setMenu(null);
+		};
+		document.addEventListener("mousedown", close);
+		document.addEventListener("keydown", close);
+		window.addEventListener("resize", close);
+		return () => {
+			document.removeEventListener("mousedown", close);
+			document.removeEventListener("keydown", close);
+			window.removeEventListener("resize", close);
+		};
+	}, [menu]);
+
+	if (editing) {
+		const finish = (input: HTMLInputElement, save: boolean) => {
+			const name = input.value.trim();
+			setEditing(false);
+			if (save && name && name !== title) onRename(name);
+		};
+		return (
+			<div className={`thread-row editing${active ? " active" : ""}`}>
+				<span className={`thread-dot${running ? " running" : ""}`} />
+				<input
+					className="thread-rename"
+					aria-label="Session name"
+					defaultValue={title}
+					autoFocus
+					onFocus={(event) => event.currentTarget.select()}
+					onBlur={(event) => finish(event.currentTarget, true)}
+					onKeyDown={(event) => {
+						if (event.key === "Enter") finish(event.currentTarget, true);
+						else if (event.key === "Escape") finish(event.currentTarget, false);
+					}}
+				/>
+			</div>
+		);
+	}
+
+	return (
+		<div className={`thread-row${active ? " active" : ""}${menu ? " menu-open" : ""}`}>
+			<button type="button" className="thread-open" title={title} onClick={onPick} onDoubleClick={() => setEditing(true)}>
+				<span className={`thread-dot${running ? " running" : ""}`} title={running ? "Running" : "Idle"} />
+				<span className="title">{title}</span>
+				<span className="time">{relativeTime(session.modified)}</span>
+			</button>
+			<button
+				type="button"
+				className="thread-more-btn"
+				aria-label={`More actions for ${title}`}
+				aria-haspopup="menu"
+				aria-expanded={Boolean(menu)}
+				onClick={(event) => {
+					const rect = event.currentTarget.getBoundingClientRect();
+					setMenu(menu ? null : { top: rect.bottom + 4, left: rect.right });
+				}}
+			>
+				<Ellipsis size={14} />
+			</button>
+			{menu && (
+				<div ref={menuRef} className="popover thread-menu" role="menu" style={{ top: menu.top, left: menu.left }}>
+					<button
+						type="button"
+						role="menuitem"
+						className="menu-item"
+						onClick={() => {
+							setMenu(null);
+							setEditing(true);
+						}}
+					>
+						<Pencil size={13} /> Rename
+					</button>
+					<button
+						type="button"
+						role="menuitem"
+						className="menu-item"
+						onClick={() => {
+							setMenu(null);
+							onFork();
+						}}
+					>
+						<Split size={13} /> Fork
+					</button>
+					{!active && (
+						<button
+							type="button"
+							role="menuitem"
+							className="menu-item danger"
+							onClick={() => {
+								setMenu(null);
+								if (window.confirm(`Delete "${title}"?`)) onDelete();
+							}}
+						>
+							<Trash2 size={13} /> Delete
+						</button>
+					)}
+				</div>
+			)}
+		</div>
+	);
+}
+
 interface Group {
 	cwd: string;
 	sessions: SessionSummary[];
@@ -42,6 +171,9 @@ export function ThreadList({
 	onNewChat,
 	onChangeCwd,
 	onRefresh,
+	onRename,
+	onFork,
+	onDelete,
 }: {
 	cwd: string;
 	sessions: SessionSummary[];
@@ -52,6 +184,9 @@ export function ThreadList({
 	onNewChat: (cwd: string) => void;
 	onChangeCwd: () => void;
 	onRefresh: () => void;
+	onRename: (path: string, name: string) => void;
+	onFork: (path: string) => void;
+	onDelete: (path: string) => void;
 }) {
 	const [query, setQuery] = useState("");
 	const [collapsed, setCollapsed] = useState(loadCollapsed);
@@ -123,17 +258,16 @@ export function ThreadList({
 								<>
 									{group.sessions.length === 0 && <div className="thread-empty">No sessions yet</div>}
 									{visible.map((session) => (
-										<button
+										<ThreadRow
 											key={session.path}
-											type="button"
-											className={`thread-row${session.path === activePath ? " active" : ""}`}
-											title={`${sessionTitle(session)}\n${relativeTime(session.modified)}`}
-											onClick={() => session.path !== activePath && onPick(session.path, session.cwd)}
-										>
-											<span className={`thread-dot${session.path === runningPath ? " running" : ""}`} title={session.path === runningPath ? "Running" : "Idle"} />
-											<span className="title">{sessionTitle(session)}</span>
-											<span className="time">{relativeTime(session.modified)}</span>
-										</button>
+											session={session}
+											active={session.path === activePath}
+											running={session.path === runningPath}
+											onPick={() => session.path !== activePath && onPick(session.path, session.cwd)}
+											onRename={(name) => onRename(session.path, name)}
+											onFork={() => onFork(session.path)}
+											onDelete={() => onDelete(session.path)}
+										/>
 									))}
 									{group.sessions.length > PER_FOLDER && (
 										<button

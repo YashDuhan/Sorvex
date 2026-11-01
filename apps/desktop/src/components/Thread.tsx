@@ -1,4 +1,4 @@
-import { AlertCircle, BarChart3, Pencil, RotateCcw, Square, Terminal, Volume2 } from "lucide-react";
+import { AlertCircle, BarChart3, Pencil, RotateCcw, Split, Square, Terminal, Volume2 } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { parseElements } from "../element.ts";
 import { compactNumber, duration } from "../format.ts";
@@ -10,6 +10,7 @@ import { PendingReply } from "./PendingReply.tsx";
 import { ElementChip } from "./ElementChip.tsx";
 import { CopyButton, Markdown } from "./Markdown.tsx";
 import { Reasoning, ToolCallBlock } from "./ToolCall.tsx";
+import { Tooltip } from "./Tooltip.tsx";
 
 function contentText(content: string | (TextContent | ImageContent)[]): string {
 	if (typeof content === "string") return content;
@@ -41,7 +42,7 @@ function Stats({ message }: { message: AssistantMessage }) {
 	);
 }
 
-function AssistantView({ message, state, actions, live }: { message: AssistantMessage; state: State; actions: SorvexActions; live: boolean }) {
+function AssistantView({ message, userIndex, state, actions, live }: { message: AssistantMessage; userIndex: number; state: State; actions: SorvexActions; live: boolean }) {
 	const results = useMemo(() => indexToolResults(state.messages), [state.messages]);
 	const text = message.content
 		.filter((block): block is TextContent => block.type === "text")
@@ -99,6 +100,14 @@ function AssistantView({ message, state, actions, live }: { message: AssistantMe
 							{state.voice.speaking ? <Square size={11} /> : <Volume2 size={13} />}
 						</button>
 					)}
+					{/* Only replies that end a turn: forking mid-turn would cut a tool call off from its result. */}
+					{message.stopReason !== "toolUse" && (
+						<Tooltip label="Fork from here" description="Starts a new session from this point. This one stays as it is.">
+							<button type="button" className="icon-btn sm" aria-label="Fork from here" disabled={state.isStreaming} onClick={() => void actions.forkFromReply(userIndex)}>
+								<Split size={13} />
+							</button>
+						</Tooltip>
+					)}
 					<Stats message={message} />
 					<span>{message.model}</span>
 					{message.usage && <span>{compactNumber(message.usage.totalTokens)} tokens</span>}
@@ -149,7 +158,7 @@ function MessageView({ message, userIndex, state, actions, live }: { message: Ag
 		case "user":
 			return <UserView message={message} userIndex={userIndex} state={state} actions={actions} />;
 		case "assistant":
-			return <AssistantView message={message} state={state} actions={actions} live={live} />;
+			return <AssistantView message={message} userIndex={userIndex} state={state} actions={actions} live={live} />;
 		case "bashExecution":
 			return (
 				<div className="tool open">

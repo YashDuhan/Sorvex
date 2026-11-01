@@ -1,9 +1,10 @@
-import { Cpu, Download, HardDrive, Loader2, MemoryStick, MonitorCog, Play, RotateCw, Search, Square, Terminal, Trash2, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Cpu, Download, HardDrive, Library, Loader2, MemoryStick, MonitorCog, Play, RotateCw, Search, Square, Terminal, ThumbsUp, Trash2, Wrench, X } from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { api, serverEvents } from "../api.ts";
 import { CHAT_ONLY_HINT, LOCAL_PROVIDER, type LocalModel, switchToLocalModel } from "../local.ts";
 import type { SorvexActions, State } from "../store.ts";
 import { Setting, Switch } from "./Pages.tsx";
+import { rememberSection, type Section, SectionLayout, storedSection } from "./SectionLayout.tsx";
 import { Select } from "./Select.tsx";
 
 interface Hardware {
@@ -32,6 +33,10 @@ interface LocalStatus {
 
 
 const CONTEXT_SIZES = [8192, 16384, 32768, 65536, 131072];
+
+const LOCAL_SECTIONS = ["models", "recommended", "search", "engine", "device"] as const;
+type LocalSection = (typeof LOCAL_SECTIONS)[number];
+const SECTION_KEY = "localSection";
 
 function bytes(value?: number): string {
 	if (!value) return "?";
@@ -76,6 +81,11 @@ export function LocalModelsPage({ state, actions, onUseInChat }: { state: State;
 	const [searching, setSearching] = useState(false);
 	const [details, setDetails] = useState<Record<string, { quantizations: { name: string; size?: number }[]; gated: false | string } | "loading">>({});
 	const running = status?.server === "running" || status?.server === "external";
+	const [section, setSection] = useState<LocalSection>(() => storedSection(SECTION_KEY, LOCAL_SECTIONS, "models"));
+	const pick = (id: LocalSection) => {
+		setSection(id);
+		rememberSection(SECTION_KEY, id);
+	};
 
 	const loadModels = useCallback(async () => {
 		try {
@@ -236,141 +246,69 @@ export function LocalModelsPage({ state, actions, onUseInChat }: { state: State;
 		);
 	};
 
-	return (
-		<div className="page">
-			<div className="page-inner">
-				<section className="card">
-					<h2>This device</h2>
-					<p>Local models run entirely on this machine. Nothing is sent to a cloud provider.</p>
-					<div className="local-hw">
-						<div>
-							<Cpu size={16} />
-							<span>
-								{hardware.cpu}
-								<small>{hardware.cores} threads</small>
-							</span>
-						</div>
-						<div>
-							<MemoryStick size={16} />
-							<span>
-								{bytes(hardware.ramTotal)} RAM
-								<small>{bytes(hardware.ramFree)} free now</small>
-							</span>
-						</div>
-						{hardware.gpus.map((gpu) => (
-							<div key={gpu.name}>
-								<MonitorCog size={16} />
-								<span>
-									{gpu.name}
-									<small>{gpu.vram ? `${bytes(gpu.vram)} VRAM` : "Shares system memory"}</small>
-								</span>
-							</div>
-						))}
-					</div>
-				</section>
+	const engineState = installing ? "installing" : !status.installed ? "not installed" : status.server === "external" ? "running" : status.server;
+	const sections: Section<LocalSection>[] = [
+		{ id: "models", group: "Models", label: "Your models", icon: <Library size={16} />, meta: running ? models.length : undefined },
+		{ id: "recommended", group: "Models", label: "Recommended", icon: <ThumbsUp size={16} />, meta: status.recommended.length },
+		{ id: "search", group: "Models", label: "Hugging Face", icon: <Search size={16} /> },
+		{ id: "engine", group: "Setup", label: "Engine", icon: <Wrench size={16} />, meta: <span className={`local-state ${engineState.replace(" ", "-")}`}>{engineState}</span> },
+		{ id: "device", group: "Setup", label: "This device", icon: <Cpu size={16} /> },
+	];
+	const about: Record<LocalSection, ReactNode> = {
+		models: (
+			<>
+				Downloaded models, plus GGUF files you put in <span className="mono">{status.modelsDir}</span>. One model is loaded at a time.
+			</>
+		),
+		recommended: "Small models with good tool calling, which coding agents need. Larger models are smarter but slower.",
+		search: "Search GGUF models, then pick a quantization: Q4_K_M is a good balance of size and quality.",
+		engine: "llama.cpp, the engine most local AI apps use. It runs GGUF models from Hugging Face on CPU or GPU.",
+		device: "Local models run entirely on this machine. Nothing is sent to a cloud provider.",
+	};
+	const titles: Record<LocalSection, string> = {
+		models: "Your models",
+		recommended: "Recommended for this device",
+		search: "Find any model on Hugging Face",
+		engine: "Engine",
+		device: "This device",
+	};
 
+	let content: ReactNode = null;
+	switch (section) {
+		case "models":
+			content = (
 				<section className="card">
-					<h2>Engine</h2>
-					<p>
-						llama.cpp, the engine most local AI apps use. It runs GGUF models from Hugging Face on CPU or GPU.
-					</p>
 					{!status.installed && !installing && (
-						<Setting label="Install llama.cpp" hint="About 30–200 MB, depending on the build. Updates are a reinstall.">
-							<Select
-								ariaLabel="Engine build"
-								width={190}
-								value={variant ?? status.hardware.recommended}
-								options={status.variants.map((option) => ({ value: option.id, label: option.label, hint: option.id === status.hardware.recommended ? "recommended" : undefined }))}
-								onChange={setVariant}
-							/>
-							<button type="button" className="btn-accent" onClick={() => void api("POST", "/api/local/install", { variant: variant ?? status.hardware.recommended })}>
-								<Download size={14} />
-								Install
+						<div className="local-empty">
+							<span>Install the engine first to run models on this device.</span>
+							<button type="button" className="btn-accent" onClick={() => pick("engine")}>
+								<Wrench size={14} />
+								Set up the engine
 							</button>
-						</Setting>
-					)}
-					{installing && (
-						<div className="local-install">
-							<span>{installing.message}</span>
-							<ProgressBar ratio={installing.ratio} />
 						</div>
 					)}
-					{status.installed && !installing && (
-						<>
-							<Setting
-								label={`llama.cpp ${status.installed.tag}`}
-								hint={
-									<>
-										{status.variants.find((option) => option.id === status.installed?.variant)?.label ?? status.installed.variant} ·{" "}
-										<span className={`local-state ${status.server}`}>
-											{status.server === "external" ? "using a server you started" : status.server}
-										</span>
-										{status.error && <span className="local-error"> {status.error}</span>}
-									</>
-								}
-							>
-								{running || status.server === "starting" ? (
-									<>
-										<button type="button" className="btn-ghost" disabled={busy.engine} onClick={() => void task("engine", () => api("POST", "/api/local/restart"))}>
-											<RotateCw size={14} />
-											Restart
-										</button>
-										<button type="button" className="btn-ghost" onClick={() => void api("POST", "/api/local/stop")}>
-											<Square size={13} />
-											Stop
-										</button>
-									</>
-								) : (
-									<button type="button" className="btn-accent" disabled={busy.engine} onClick={() => void task("engine", () => api("POST", "/api/local/start"))}>
-										{busy.engine ? <Loader2 size={14} className="spin" /> : <Play size={14} />}
-										Start
-									</button>
-								)}
-								<button type="button" className={`btn-ghost${logsOpen ? " active" : ""}`} onClick={() => setLogsOpen(!logsOpen)}>
-									<Terminal size={14} />
-									Logs
-								</button>
-							</Setting>
-							<Setting label="Context window" hint="How much text a model sees at once. Coding agents need 32K or more; larger uses more memory. Restart to apply.">
-								<Select
-									ariaLabel="Context window"
-									width={130}
-									value={String(status.settings.contextSize)}
-									options={CONTEXT_SIZES.map((size) => ({ value: String(size), label: `${size / 1024}K tokens` }))}
-									onChange={(value) => saveSettings({ contextSize: Number(value) })}
-								/>
-							</Setting>
-							<Setting label="Use the GPU" hint="Off runs on the CPU only: slower, but avoids GPU driver problems. Restart to apply.">
-								<Switch on={status.settings.gpu} label="Use the GPU" onChange={(gpu) => saveSettings({ gpu })} />
-							</Setting>
-							<Setting label="Start with Sorvex" hint="Start the engine when the app opens, so local models are ready.">
-								<Switch on={status.settings.autoStart} label="Start with Sorvex" onChange={(autoStart) => saveSettings({ autoStart })} />
-							</Setting>
-							<Setting label="Update or switch build" hint="Downloads the newest llama.cpp release for the chosen build.">
-								<Select
-									ariaLabel="Engine build"
-									width={190}
-									value={variant ?? status.installed.variant}
-									options={status.variants.map((option) => ({ value: option.id, label: option.label, hint: option.id === status.hardware.recommended ? "recommended" : undefined }))}
-									onChange={setVariant}
-								/>
-								<button type="button" className="btn-ghost" onClick={() => void api("POST", "/api/local/install", { variant: variant ?? status.installed?.variant })}>
-									<Download size={14} />
-									Reinstall
-								</button>
-							</Setting>
-							{logsOpen && <pre className="local-logs">{logs.join("\n") || "No output yet."}</pre>}
-						</>
+					{(status.installed || installing) && !running && (
+						<div className="local-empty">
+							<span>{status.server === "starting" ? "The engine is starting." : "Start the engine to see and use your models."}</span>
+							<button type="button" className="btn-accent" disabled={busy.engine || status.server === "starting"} onClick={() => void task("engine", () => api("POST", "/api/local/start"))}>
+								{busy.engine || status.server === "starting" ? <Loader2 size={14} className="spin" /> : <Play size={14} />}
+								Start the engine
+							</button>
+						</div>
 					)}
-				</section>
-
-				<section className="card">
-					<h2>Your models</h2>
-					<p>
-						Downloaded models, plus GGUF files you put in <span className="mono">{status.modelsDir}</span>. One model is loaded at a time.
-					</p>
-					{!running && <div className="empty-note">Start the engine to see and use your models.</div>}
-					{running && models.length === 0 && <div className="empty-note">No models yet. Download one below.</div>}
+					{running && models.length === 0 && (
+						<div className="local-empty">
+							<span>No models yet.</span>
+							<button type="button" className="btn-ghost" onClick={() => pick("recommended")}>
+								<ThumbsUp size={14} />
+								See recommended
+							</button>
+							<button type="button" className="btn-ghost" onClick={() => pick("search")}>
+								<Search size={14} />
+								Search Hugging Face
+							</button>
+						</div>
+					)}
 					{models.map((model) => {
 						const loaded = model.status.value === "loaded";
 						const incomplete = model.status.value === "incomplete";
@@ -425,11 +363,10 @@ export function LocalModelsPage({ state, actions, onUseInChat }: { state: State;
 						);
 					})}
 				</section>
-
-				<section className="card">
-					<h2>Recommended for this device</h2>
-					<p>Small models with good tool calling, which coding agents need. Larger models are smarter but slower.</p>
-					{status.recommended.map((model) => {
+			);
+			break;
+		case "recommended":
+			content = <section className="card">{status.recommended.map((model) => {
 						const id = `${model.repo}:${model.quant}`;
 						const verdict = fit(model.size, hardware);
 						return (
@@ -445,12 +382,11 @@ export function LocalModelsPage({ state, actions, onUseInChat }: { state: State;
 								{downloadButton(id, model.size)}
 							</div>
 						);
-					})}
-				</section>
-
+					})}</section>;
+			break;
+		case "search":
+			content = (
 				<section className="card">
-					<h2>Find any model on Hugging Face</h2>
-					<p>Search GGUF models, then pick a quantization: Q4_K_M is a good balance of size and quality.</p>
 					<form
 						className="local-search"
 						onSubmit={(event) => {
@@ -506,7 +442,146 @@ export function LocalModelsPage({ state, actions, onUseInChat }: { state: State;
 						);
 					})}
 				</section>
-			</div>
-		</div>
+			);
+			break;
+		case "engine":
+			content = (
+				<>
+					{(!status.installed || installing) && (
+						<section className="card">
+							{!status.installed && !installing && (
+						<Setting label="Install llama.cpp" hint="About 30–200 MB, depending on the build. Updates are a reinstall.">
+							<Select
+								ariaLabel="Engine build"
+								width={190}
+								value={variant ?? status.hardware.recommended}
+								options={status.variants.map((option) => ({ value: option.id, label: option.label, hint: option.id === status.hardware.recommended ? "recommended" : undefined }))}
+								onChange={setVariant}
+							/>
+							<button type="button" className="btn-accent" onClick={() => void api("POST", "/api/local/install", { variant: variant ?? status.hardware.recommended })}>
+								<Download size={14} />
+								Install
+							</button>
+						</Setting>
+					)}
+							{installing && (
+						<div className="local-install">
+							<span>{installing.message}</span>
+							<ProgressBar ratio={installing.ratio} />
+						</div>
+					)}
+						</section>
+					)}
+					{status.installed && !installing && (
+						<>
+							<section className="card">
+								<Setting
+								label={`llama.cpp ${status.installed.tag}`}
+								hint={
+									<>
+										{status.variants.find((option) => option.id === status.installed?.variant)?.label ?? status.installed.variant} ·{" "}
+										<span className={`local-state ${status.server}`}>
+											{status.server === "external" ? "using a server you started" : status.server}
+										</span>
+										{status.error && <span className="local-error"> {status.error}</span>}
+									</>
+								}
+							>
+								{running || status.server === "starting" ? (
+									<>
+										<button type="button" className="btn-ghost" disabled={busy.engine} onClick={() => void task("engine", () => api("POST", "/api/local/restart"))}>
+											<RotateCw size={14} />
+											Restart
+										</button>
+										<button type="button" className="btn-ghost" onClick={() => void api("POST", "/api/local/stop")}>
+											<Square size={13} />
+											Stop
+										</button>
+									</>
+								) : (
+									<button type="button" className="btn-accent" disabled={busy.engine} onClick={() => void task("engine", () => api("POST", "/api/local/start"))}>
+										{busy.engine ? <Loader2 size={14} className="spin" /> : <Play size={14} />}
+										Start
+									</button>
+								)}
+								<button type="button" className={`btn-ghost${logsOpen ? " active" : ""}`} onClick={() => setLogsOpen(!logsOpen)}>
+									<Terminal size={14} />
+									Logs
+								</button>
+							</Setting>
+								{logsOpen && <pre className="local-logs">{logs.join("\n") || "No output yet."}</pre>}
+							</section>
+							<section className="card">
+								<h2>Options</h2>
+								<Setting label="Context window" hint="How much text a model sees at once. Coding agents need 32K or more; larger uses more memory. Restart to apply.">
+								<Select
+									ariaLabel="Context window"
+									width={130}
+									value={String(status.settings.contextSize)}
+									options={CONTEXT_SIZES.map((size) => ({ value: String(size), label: `${size / 1024}K tokens` }))}
+									onChange={(value) => saveSettings({ contextSize: Number(value) })}
+								/>
+							</Setting>
+							<Setting label="Use the GPU" hint="Off runs on the CPU only: slower, but avoids GPU driver problems. Restart to apply.">
+								<Switch on={status.settings.gpu} label="Use the GPU" onChange={(gpu) => saveSettings({ gpu })} />
+							</Setting>
+							<Setting label="Start with Sorvex" hint="Start the engine when the app opens, so local models are ready.">
+								<Switch on={status.settings.autoStart} label="Start with Sorvex" onChange={(autoStart) => saveSettings({ autoStart })} />
+							</Setting>
+							</section>
+							<section className="card">
+								<h2>Build</h2>
+								<Setting label="Update or switch build" hint="Downloads the newest llama.cpp release for the chosen build.">
+								<Select
+									ariaLabel="Engine build"
+									width={190}
+									value={variant ?? status.installed.variant}
+									options={status.variants.map((option) => ({ value: option.id, label: option.label, hint: option.id === status.hardware.recommended ? "recommended" : undefined }))}
+									onChange={setVariant}
+								/>
+								<button type="button" className="btn-ghost" onClick={() => void api("POST", "/api/local/install", { variant: variant ?? status.installed?.variant })}>
+									<Download size={14} />
+									Reinstall
+								</button>
+							</Setting>
+							</section>
+						</>
+					)}
+				</>
+			);
+			break;
+		case "device":
+			content = <section className="card"><div className="local-hw">
+						<div>
+							<Cpu size={16} />
+							<span>
+								{hardware.cpu}
+								<small>{hardware.cores} threads</small>
+							</span>
+						</div>
+						<div>
+							<MemoryStick size={16} />
+							<span>
+								{bytes(hardware.ramTotal)} RAM
+								<small>{bytes(hardware.ramFree)} free now</small>
+							</span>
+						</div>
+						{hardware.gpus.map((gpu) => (
+							<div key={gpu.name}>
+								<MonitorCog size={16} />
+								<span>
+									{gpu.name}
+									<small>{gpu.vram ? `${bytes(gpu.vram)} VRAM` : "Shares system memory"}</small>
+								</span>
+							</div>
+						))}
+					</div></section>;
+			break;
+	}
+
+	return (
+		<SectionLayout sections={sections} current={section} onPick={pick} title={titles[section]} about={about[section]}>
+			{content}
+		</SectionLayout>
 	);
 }

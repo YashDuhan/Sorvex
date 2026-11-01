@@ -1,14 +1,14 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { Diff, Folder, Globe, Plus, RotateCw, Smartphone, SquareTerminal } from "lucide-react";
+import { Bookmark, Diff, Folder, Globe, KeyRound, Plus, RotateCw, Shield, Smartphone, SquareTerminal } from "lucide-react";
 import { VscLayoutSidebarLeft, VscLayoutSidebarLeftOff, VscLayoutSidebarRight, VscLayoutSidebarRightOff } from "react-icons/vsc";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Composer } from "./components/Composer.tsx";
 import { type Page, PageHeader, Rail, ResizeHandles } from "./components/Chrome.tsx";
 import { AnnotationsBox, PendingApprovals, SelectionPopover } from "./components/Harness.tsx";
 import { DownloadsTray } from "./components/DownloadsTray.tsx";
 import { ExtensionDialog, Toasts } from "./components/Overlays.tsx";
-import { AboutPage, LogsPage, SettingsPage, type Theme } from "./components/Pages.tsx";
+import { AboutPage, SettingsPage, type Theme } from "./components/Pages.tsx";
 import { BrowserPane } from "./components/BrowserPane.tsx";
 import { DevicePane } from "./components/DevicePane.tsx";
 import { ChangesPane } from "./components/ChangesPane.tsx";
@@ -22,7 +22,9 @@ import { SkillsPage } from "./components/Skills.tsx";
 import { type ModalKind, Modals, shouldShowLocalNotice } from "./components/Modals.tsx";
 import { ProvidersPage } from "./components/Providers.tsx";
 import { SshPage } from "./components/Ssh.tsx";
-import { type PanelTab, RightSidebar } from "./components/RightSidebar.tsx";
+import { FindBar } from "./components/FindBar.tsx";
+import { type PanelTab, panelTab, RightSidebar } from "./components/RightSidebar.tsx";
+import { SurfaceLauncher } from "./components/SurfaceLauncher.tsx";
 import { Thread } from "./components/Thread.tsx";
 import { sessionTitle, ThreadList } from "./components/ThreadList.tsx";
 import { buildTranscript, liveStatus } from "./btw.ts";
@@ -31,7 +33,19 @@ import { api, serverEvents } from "./api.ts";
 import { LOCAL_PROVIDER } from "./local.ts";
 import { inTauri } from "./window.ts";
 
-type SidePane = "terminal" | "changes" | "browser" | "device" | "files" | "sidechat";
+type SidePane = "terminal" | "changes" | "browser" | "device" | "files" | "sidechat" | "launcher";
+
+/** The surface launcher's list, in order. Ids are panes, or `panel:<tab>` for a right sidebar panel. */
+const SURFACES: { id: string; label: string; icon: ReactNode; key: string; hint?: string }[] = [
+	{ id: "terminal", label: "Terminal", icon: <SquareTerminal size={16} />, key: "T" },
+	{ id: "browser", label: "Browser", icon: <Globe size={16} />, key: "B" },
+	{ id: "device", label: "Device", icon: <Smartphone size={16} />, key: "M", hint: "Android emulator" },
+	{ id: "changes", label: "Changes", icon: <Diff size={16} />, key: "D", hint: "Git diff of the working tree" },
+	{ id: "files", label: "Files", icon: <Folder size={16} />, key: "F" },
+	{ id: "panel:guardrails", label: "Guardrails", icon: <Shield size={16} />, key: "G" },
+	{ id: "panel:prompts", label: "Prompts", icon: <Bookmark size={16} />, key: "P" },
+	{ id: "panel:permissions", label: "Permissions", icon: <KeyRound size={16} />, key: "R" },
+];
 
 function readStored<T extends string>(key: string, fallback: T): T {
 	try {
@@ -53,8 +67,9 @@ export function App() {
 	const { state, actions } = useSorvex();
 	const [page, setPage] = useState<Page>("chat");
 	const [threadsOpen, setThreadsOpen] = useState(() => readStored("threadsOpen", "1") === "1");
-	const [panel, setPanel] = useState<PanelTab | null>(() => (readStored("panel", "") || null) as PanelTab | null);
-	const [lastPanel, setLastPanel] = useState<PanelTab>(() => (readStored("lastPanel", "search") as PanelTab) || "search");
+	const [panel, setPanel] = useState<PanelTab | null>(() => panelTab(readStored("panel", "")));
+	// Ctrl+F find bar; the nonce reselects the query when Ctrl+F is pressed while it is open.
+	const [find, setFind] = useState<{ open: boolean; nonce: number }>({ open: false, nonce: 0 });
 	const [theme, setTheme] = useState<Theme>(() => readStored<Theme>("theme", "dark"));
 	const [modal, setModal] = useState<ModalKind | null>(null);
 	const [sideRequest, setSideRequest] = useState<{ text: string; nonce: number } | null>(null);
@@ -116,11 +131,36 @@ export function App() {
 				if (!focused) void api("POST", "/api/notify", { title, body }).catch(() => undefined);
 			});
 	}, [state.isStreaming, state.messages, state.settings]);
+	// Browser or Device shown as a floating preview over the chat instead of in the side pane.
+	const [floating, setFloating] = useState<"browser" | "device" | null>(null);
+	const [floatHost, setFloatHost] = useState<HTMLElement | null>(null);
+	/** Opens a side pane. Opening the one that is floating docks it back into the side pane. */
 	const showPane = useCallback((next: SidePane | null) => {
 		setSidePane(next);
-		if (next) setMounted((current) => (current.has(next) ? current : new Set([...current, next])));
-		else setPaneExpanded(false);
+		if (next) {
+			setMounted((current) => (current.has(next) ? current : new Set([...current, next])));
+			setFloating((current) => (current === next ? null : current));
+		} else setPaneExpanded(false);
 	}, []);
+	/** Moves Browser or Device out of the side pane into the floating preview. */
+	const floatPane = useCallback((kind: "browser" | "device") => {
+		setFloating(kind);
+		setMounted((current) => (current.has(kind) ? current : new Set([...current, kind])));
+		setSidePane((current) => (current === kind ? null : current));
+		setPaneExpanded(false);
+	}, []);
+	const sidePaneRef = useRef(sidePane);
+	sidePaneRef.current = sidePane;
+	// Whether the working tree has a diff, so the launcher can grey out Changes; checked each time it opens.
+	const [hasChanges, setHasChanges] = useState<boolean | null>(null);
+	useEffect(() => {
+		if (sidePane !== "launcher") return;
+		setHasChanges(null);
+		void api<{ files: unknown[] }>("POST", "/api/git/changes", {}).then(
+			(summary) => setHasChanges(summary.files.length > 0),
+			() => setHasChanges(false),
+		);
+	}, [sidePane]);
 	const togglePane = (next: SidePane) => showPane(sidePane === next ? null : next);
 	const resizePane = (width: number) => setPaneWidth(Math.min(Math.max(width, 360), window.innerWidth - 300));
 	const browserOpen = sidePane === "browser";
@@ -129,15 +169,16 @@ export function App() {
 	useEffect(() => {
 		if (approvalsPending) setPaneExpanded(false);
 	}, [approvalsPending]);
-	// Open the Browser pane when the AI starts using the browser, so the user sees what it does.
+	// Show the browser when the AI starts using it, so the user sees what it does.
 	const usingBrowser = Object.values(state.running).some((tool) => tool.name.startsWith("browser_"));
+	// It floats over the chat, unless the user already has it open in the side pane.
 	useEffect(() => {
-		if (usingBrowser) showPane("browser");
-	}, [usingBrowser, showPane]);
+		if (usingBrowser && sidePaneRef.current !== "browser") floatPane("browser");
+	}, [usingBrowser, floatPane]);
 	const usingDevice = Object.values(state.running).some((tool) => tool.name.startsWith("device_"));
 	useEffect(() => {
-		if (usingDevice) showPane("device");
-	}, [usingDevice, showPane]);
+		if (usingDevice && sidePaneRef.current !== "device") floatPane("device");
+	}, [usingDevice, floatPane]);
 	const lastEscape = useRef(0);
 
 	// "system" follows the OS light/dark preference, like the TUI's automatic theme.
@@ -151,13 +192,7 @@ export function App() {
 	}, [theme]);
 
 	useEffect(() => writeStored("threadsOpen", threadsOpen ? "1" : "0"), [threadsOpen]);
-	useEffect(() => {
-		writeStored("panel", panel ?? "");
-		if (panel) {
-			setLastPanel(panel);
-			writeStored("lastPanel", panel);
-		}
-	}, [panel]);
+	useEffect(() => writeStored("panel", panel ?? ""), [panel]);
 
 	// A pending approval should never be hidden: switch to the chat if it arrives elsewhere.
 	useEffect(() => {
@@ -291,7 +326,7 @@ export function App() {
 			if (event.altKey && !ctrl && key === "t") return event.preventDefault(), setPanel((current) => (current === "todos" ? null : "todos"));
 			if (ctrl && !event.shiftKey && key === "o") return event.preventDefault(), actions.setUi({ expandTools: !state.expandTools });
 			if (ctrl && !event.shiftKey && key === "t") return event.preventDefault(), actions.setUi({ hideThinking: !state.hideThinking });
-			if (ctrl && event.shiftKey && key === "f") return event.preventDefault(), setPanel("search");
+			if (ctrl && !event.altKey && key === "f" && page === "chat") return event.preventDefault(), setFind((current) => ({ open: true, nonce: current.nonce + 1 }));
 			if (ctrl && !event.shiftKey && key === "n") return event.preventDefault(), void actions.newSession();
 			if (event.key === "Escape" && !modal && state.dialogs.length === 0) {
 				if (state.isStreaming) return void actions.abort();
@@ -312,7 +347,7 @@ export function App() {
 		};
 		document.addEventListener("keydown", onKey);
 		return () => document.removeEventListener("keydown", onKey);
-	}, [actions, cycleMode, modal, state.statuses, state.expandTools, state.hideThinking, state.isStreaming, state.dialogs.length, state.cwd]);
+	}, [actions, cycleMode, modal, page, state.statuses, state.expandTools, state.hideThinking, state.isStreaming, state.dialogs.length, state.cwd]);
 
 	const dialog = state.dialogs[0];
 	const widgets = (placement: "aboveEditor" | "belowEditor") =>
@@ -379,12 +414,13 @@ export function App() {
 									))}
 									<button
 										type="button"
-										className="icon-btn panel-toggle"
-										aria-label="Toggle right panel"
-										title="Right panel"
-										onClick={() => setPanel(panel ? null : lastPanel)}
+										className={`icon-btn panel-toggle${sidePane === "launcher" ? " active" : ""}`}
+										aria-label={sidePane ? "Close the side pane" : "Open a surface"}
+										aria-pressed={Boolean(sidePane)}
+										title={sidePane ? "Close pane" : "Open a surface"}
+										onClick={() => showPane(sidePane ? null : "launcher")}
 									>
-										{panel ? <VscLayoutSidebarRight size={20} /> : <VscLayoutSidebarRightOff size={20} />}
+										{sidePane ? <VscLayoutSidebarRight size={20} /> : <VscLayoutSidebarRightOff size={20} />}
 									</button>
 								</>
 							}
@@ -417,9 +453,13 @@ export function App() {
 									onNewChat={(folder) => void actions.newChatIn(folder)}
 									onChangeCwd={() => void changeCwd()}
 									onRefresh={() => void actions.refreshSessions()}
+									onRename={(path, name) => void actions.renameSession(name, path)}
+									onFork={(path) => void actions.forkSession(path)}
+									onDelete={(path) => void actions.deleteSession(path)}
 								/>
 							)}
-							<section className="thread" hidden={Boolean(sidePane) && paneExpanded}>
+							<section ref={setFloatHost} className="thread" hidden={Boolean(sidePane) && paneExpanded}>
+								<FindBar open={find.open} focusNonce={find.nonce} version={state.messages} onClose={() => setFind((current) => ({ ...current, open: false }))} />
 								<Thread
 									state={state}
 									actions={actions}
@@ -455,7 +495,7 @@ export function App() {
 									</div>
 								</div>
 							</section>
-							{browserOpen && (
+							{(browserOpen || floating === "browser") && (
 								<BrowserPane
 									actions={actions}
 									expanded={paneExpanded}
@@ -463,11 +503,17 @@ export function App() {
 									width={paneWidth}
 									onResize={resizePane}
 									onClose={() => showPane(null)}
+									floating={floating === "browser"}
+									floatHost={floatHost}
+									onFloat={() => floatPane("browser")}
 								/>
 							)}
 							{mounted.has("device") && (
 								<DevicePane
-									hidden={sidePane !== "device"}
+									hidden={sidePane !== "device" && floating !== "device"}
+									floating={floating === "device"}
+									floatHost={floatHost}
+									onFloat={() => floatPane("device")}
 									expanded={paneExpanded}
 									onToggleExpand={() => setPaneExpanded(!paneExpanded)}
 									width={paneWidth}
@@ -527,6 +573,24 @@ export function App() {
 									toast={actions.toast}
 								/>
 							)}
+							{sidePane === "launcher" && (
+								<SurfaceLauncher
+									surfaces={SURFACES.map((surface) =>
+										surface.id === "changes" && !hasChanges ? { ...surface, disabled: true, hint: hasChanges === null ? "Checking for changes" : "No changes in the working tree" } : surface,
+									)}
+									onPick={(id) => {
+										if (id.startsWith("panel:")) {
+											setPanel(id.slice("panel:".length) as PanelTab);
+											showPane(null);
+										} else showPane(id as SidePane);
+									}}
+									expanded={paneExpanded}
+									onToggleExpand={() => setPaneExpanded(!paneExpanded)}
+									width={paneWidth}
+									onResize={resizePane}
+									onClose={() => showPane(null)}
+								/>
+							)}
 							<RightSidebar state={state} actions={actions} tab={panel} onTab={setPanel} />
 						</div>
 						<SelectionPopover onAnnotate={actions.addAnnotation} />
@@ -551,12 +615,6 @@ export function App() {
 					<>
 						<PageHeader title="Settings" />
 						<SettingsPage state={state} actions={actions} theme={theme} onTheme={setTheme} onChangeCwd={() => void changeCwd()} />
-					</>
-				)}
-				{page === "logs" && (
-					<>
-						<PageHeader title="Logs" />
-						<LogsPage state={state} onClear={actions.clearLogs} />
 					</>
 				)}
 				{page === "about" && (

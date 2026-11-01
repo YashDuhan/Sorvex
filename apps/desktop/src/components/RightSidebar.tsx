@@ -1,71 +1,25 @@
-import { Bot, ChevronRight, Circle, CircleCheck, CircleDot, FileText, Plug, Plus, SearchIcon, ShieldCheck, Trash2 } from "lucide-react";
-import { FaShieldAlt } from "react-icons/fa";
-import { LuListTodo, LuSlidersHorizontal } from "react-icons/lu";
-import { TiFlowSwitch } from "react-icons/ti";
-import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from "react";
+import { Bookmark, ChevronRight, Circle, CircleCheck, CircleDot, KeyRound, ListChecks, Plus, Shield, ShieldCheck, Trash2, Workflow } from "lucide-react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { api } from "../api.ts";
-import type { AgentMessage } from "../rpc.ts";
 import { type DesktopSettings, newId, type Permission, type Reviewer, type SafetyRule } from "../settings.ts";
-import { type SorvexActions, currentMode, type Mode, type State } from "../store.ts";
-import { Setting, Switch } from "./Pages.tsx";
+import type { SorvexActions, State } from "../store.ts";
+import { Switch } from "./Pages.tsx";
 import { Select } from "./Select.tsx";
 
-export type PanelTab = "search" | "guardrails" | "todos" | "modes" | "prompts" | "agents" | "permissions" | "config";
+export type PanelTab = "guardrails" | "todos" | "prompts" | "agents" | "permissions";
 
-// Same icons and order as warpdrv's chat sidebar.
+/** A remembered panel, or null when it no longer exists (e.g. the removed Config panel). */
+export const panelTab = (value: string): PanelTab | null => (TABS.some((entry) => entry.tab === value) ? (value as PanelTab) : null);
+
+// One outline set, chosen for what each panel holds.
 const TABS: { tab: PanelTab; label: string; icon: ReactNode }[] = [
-	{ tab: "search", label: "Search", icon: <SearchIcon size={18} /> },
-	{ tab: "guardrails", label: "Guardrails", icon: <FaShieldAlt size={18} /> },
-	{ tab: "todos", label: "Todos", icon: <LuListTodo size={18} /> },
-	{ tab: "modes", label: "Modes", icon: <TiFlowSwitch size={18} /> },
-	{ tab: "prompts", label: "Prompts", icon: <FileText size={18} /> },
-	{ tab: "agents", label: "Agents", icon: <Bot size={18} /> },
-	{ tab: "permissions", label: "Permissions", icon: <Plug size={18} /> },
-	{ tab: "config", label: "Config", icon: <LuSlidersHorizontal size={18} /> },
+	{ tab: "guardrails", label: "Guardrails", icon: <Shield size={18} /> },
+	{ tab: "todos", label: "Todos", icon: <ListChecks size={18} /> },
+	{ tab: "prompts", label: "Prompts", icon: <Bookmark size={18} /> },
+	{ tab: "agents", label: "Agents", icon: <Workflow size={18} /> },
+	{ tab: "permissions", label: "Permissions", icon: <KeyRound size={18} /> },
 ];
 
-function messageText(message: AgentMessage): string {
-	if (message.role === "user") return typeof message.content === "string" ? message.content : message.content.map((b) => (b.type === "text" ? b.text : "")).join(" ");
-	if (message.role === "assistant") return message.content.map((b) => (b.type === "text" ? b.text : "")).join(" ");
-	return "";
-}
-
-function SearchPanel({ state }: { state: State }) {
-	const [query, setQuery] = useState("");
-	const hits = useMemo(() => {
-		const needle = query.trim().toLowerCase();
-		if (needle.length < 2) return [];
-		return state.messages
-			.map((message, index) => ({ index, role: message.role, text: messageText(message) }))
-			.filter((hit) => hit.text.toLowerCase().includes(needle))
-			.slice(0, 50);
-	}, [state.messages, query]);
-	const jump = (index: number) => {
-		const element = document.querySelector(`[data-msg-index="${index}"]`);
-		element?.scrollIntoView({ behavior: "smooth", block: "center" });
-		element?.classList.add("flash");
-		setTimeout(() => element?.classList.remove("flash"), 1200);
-	};
-	return (
-		<>
-			<label className="search">
-				<SearchIcon size={15} />
-				<input autoFocus placeholder="Search in thread..." value={query} onChange={(event) => setQuery(event.target.value)} />
-			</label>
-			{hits.map((hit) => {
-				const at = hit.text.toLowerCase().indexOf(query.trim().toLowerCase());
-				const snippet = hit.text.slice(Math.max(0, at - 40), at + 80);
-				return (
-					<button key={hit.index} type="button" className="panel-row" onClick={() => jump(hit.index)}>
-						<small className="g-type">{hit.role}</small>
-						<span>…{snippet}…</span>
-					</button>
-				);
-			})}
-			{query.trim().length >= 2 && hits.length === 0 && <div className="empty-note">No matches</div>}
-		</>
-	);
-}
 
 function RuleRow({ rule, onChange, onDelete }: { rule: SafetyRule; onChange: (rule: SafetyRule) => void; onDelete: () => void }) {
 	const [open, setOpen] = useState(false);
@@ -352,49 +306,6 @@ function TodosPanel({ state }: { state: State }) {
 	);
 }
 
-const MODE_INFO: { mode: Mode; label: string; color: string; description: string; tools: string }[] = [
-	{ mode: "build", label: "Build", color: "var(--accent-blue)", description: "Writes and changes code. The default.", tools: "All tools" },
-	{
-		mode: "plan",
-		label: "Plan",
-		color: "var(--mode-plan)",
-		description: "Explores read-only and writes a plan for your approval before any change.",
-		tools: "Read-only tools until you approve the plan",
-	},
-	{
-		mode: "security",
-		label: "Security",
-		color: "var(--mode-security)",
-		description: "Finds, verifies, and fixes vulnerabilities with the built-in security subagents.",
-		tools: "All tools, plus security guidance and subagents",
-	},
-];
-
-function ModesPanel({ state, actions }: { state: State; actions: SorvexActions }) {
-	const mode = currentMode(state.statuses);
-	return (
-		<>
-			{MODE_INFO.map((info) => (
-				<button
-					key={info.mode}
-					type="button"
-					className={`mode-card${mode === info.mode ? " active" : ""}`}
-					style={{ "--mode-color": info.color } as CSSProperties}
-					onClick={() => mode !== info.mode && void actions.setMode(info.mode)}
-				>
-					<div className="mode-card-head">
-						<span className="mode-dot" />
-						<span>{info.label}</span>
-						{mode === info.mode && <small>Active</small>}
-					</div>
-					<div className="mode-card-body">{info.description}</div>
-					<small>{info.tools}</small>
-				</button>
-			))}
-		</>
-	);
-}
-
 function PromptsPanel({ state, actions, settings, save }: { state: State; actions: SorvexActions; settings: DesktopSettings; save: (settings: DesktopSettings) => void }) {
 	const [name, setName] = useState("");
 	const [content, setContent] = useState("");
@@ -490,7 +401,7 @@ function AgentsPanel({ state }: { state: State }) {
 			{[...runs].reverse().map((run) => (
 				<div key={run.id} className="panel-card">
 					<div className="panel-card-head">
-						<Bot size={14} />
+						<Workflow size={14} />
 						<span className="panel-card-title">{run.name}</span>
 						<span className={`badge ${run.status === "done" ? "ok" : run.status === "failed" ? "danger" : "warn"}`}>{run.status}</span>
 					</div>
@@ -526,69 +437,6 @@ function AgentsPanel({ state }: { state: State }) {
 	);
 }
 
-function ConfigPanel({ state, actions }: { state: State; actions: SorvexActions }) {
-	const session = state.session;
-	const [name, setName] = useState(session?.sessionName ?? "");
-	const [instructions, setInstructions] = useState("");
-	if (!session) return <div className="empty-note">Not connected</div>;
-	return (
-		<>
-			<label className="panel-label">
-				Session name
-				<input
-					className="modal-input"
-					value={name}
-					placeholder="Untitled"
-					onChange={(event) => setName(event.target.value)}
-					onBlur={() => name.trim() && name !== session.sessionName && void actions.renameSession(name.trim())}
-				/>
-			</label>
-			<label className="panel-label">
-				Thinking level
-				<div className="segmented wrap">
-					{state.thinkingLevels.map((level) => (
-						<button key={level} type="button" className={session.thinkingLevel === level ? "on" : ""} onClick={() => void actions.setThinking(level)}>
-							{level}
-						</button>
-					))}
-				</div>
-			</label>
-			<Setting label="Auto-compaction">
-				<Switch on={session.autoCompactionEnabled} label="Auto-compaction" onChange={(enabled) => void actions.sessionCommand({ type: "set_auto_compaction", enabled })} />
-			</Setting>
-			<Setting label="Auto-retry" hint="Retry transient provider errors">
-				<Switch on label="Auto-retry" onChange={(enabled) => void actions.sessionCommand({ type: "set_auto_retry", enabled })} />
-			</Setting>
-			<label className="panel-label">
-				Steering while running
-				<div className="segmented">
-					{(["one-at-a-time", "all"] as const).map((mode) => (
-						<button key={mode} type="button" onClick={() => void actions.sessionCommand({ type: "set_steering_mode", mode })}>
-							{mode}
-						</button>
-					))}
-				</div>
-			</label>
-			<label className="panel-label">
-				Compact now
-				<textarea
-					className="modal-input"
-					rows={2}
-					placeholder="Optional instructions for the summary"
-					value={instructions}
-					onChange={(event) => setInstructions(event.target.value)}
-				/>
-				<button type="button" className="btn-ghost" disabled={state.isStreaming} onClick={() => void actions.compact(instructions.trim() || undefined)}>
-					Compact context
-				</button>
-			</label>
-			<button type="button" className="btn-ghost" onClick={() => void actions.exportHtml()}>
-				Export session as HTML
-			</button>
-		</>
-	);
-}
-
 /** Right-hand tool strip with a 300px panel, like warpdrv's chat sidebar. Clicking the open tab closes it. */
 export function RightSidebar({ state, actions, tab, onTab }: { state: State; actions: SorvexActions; tab: PanelTab | null; onTab: (tab: PanelTab | null) => void }) {
 	const settings = state.settings;
@@ -600,14 +448,11 @@ export function RightSidebar({ state, actions, tab, onTab }: { state: State; act
 				<aside className="side-panel">
 					<div className="side-panel-head">{title}</div>
 					<div className="side-panel-body">
-						{tab === "search" && <SearchPanel state={state} />}
 						{tab === "guardrails" && settings && <GuardrailsPanel state={state} settings={settings} save={save} />}
 						{tab === "permissions" && settings && <PermissionsPanel state={state} settings={settings} save={save} />}
 						{tab === "todos" && <TodosPanel state={state} />}
-						{tab === "modes" && <ModesPanel state={state} actions={actions} />}
 						{tab === "prompts" && settings && <PromptsPanel state={state} actions={actions} settings={settings} save={save} />}
 						{tab === "agents" && <AgentsPanel state={state} />}
-						{tab === "config" && <ConfigPanel state={state} actions={actions} />}
 					</div>
 				</aside>
 			)}

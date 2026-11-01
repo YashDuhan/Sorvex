@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Download, ExternalLink, Eye, Library, Loader2, RefreshCw, Search, Sparkles, Trash2 } from "lucide-react";
+import { BookOpen, ChevronLeft, ChevronRight, Download, ExternalLink, Eye, Library, Loader2, RefreshCw, Search, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api.ts";
 import type { SorvexActions, State } from "../store.ts";
@@ -187,7 +187,7 @@ function InstalledView({ state, actions, onBrowse, installed, loading, reload }:
 				{installed && installed.length === 0 && (
 					<div className="mcp-empty">
 						<div className="mcp-empty-icon">
-							<Sparkles size={22} />
+							<BookOpen size={22} />
 						</div>
 						<h2>No skills yet</h2>
 						<p>Skills are SKILL.md files that teach the agent a task. Install one from the registry, or add a folder under ~/.sorvex/agent/skills.</p>

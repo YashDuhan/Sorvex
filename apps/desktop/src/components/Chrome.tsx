@@ -1,21 +1,20 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Copy, Cpu, Info, KeyRound, MessageSquare, Minus, Plug, ScrollText, Server, Settings, Sparkles, Square, X } from "lucide-react";
+import { Blocks, BookOpen, Cable, Cloud, Copy, HardDrive, Info, MessageSquare, Minus, Settings, Square, X } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Connection } from "../store.ts";
 import { inTauri, useWindowControls } from "../window.ts";
 
-export type Page = "chat" | "mcp" | "skills" | "ssh" | "providers" | "local" | "logs" | "settings" | "about";
+export type Page = "chat" | "mcp" | "skills" | "ssh" | "providers" | "local" | "settings" | "about";
 
 const NAV: { page: Page; label: string; icon: ReactNode }[] = [
 	{ page: "chat", label: "Chat", icon: <MessageSquare size={18} /> },
-	{ page: "mcp", label: "MCP", icon: <Plug size={18} /> },
-	{ page: "skills", label: "Skills", icon: <Sparkles size={18} /> },
-	{ page: "ssh", label: "SSH", icon: <Server size={18} /> },
-	{ page: "providers", label: "Providers", icon: <KeyRound size={18} /> },
-	{ page: "local", label: "Local models", icon: <Cpu size={18} /> },
+	{ page: "mcp", label: "MCP", icon: <Blocks size={18} /> },
+	{ page: "skills", label: "Skills", icon: <BookOpen size={18} /> },
+	{ page: "ssh", label: "SSH", icon: <Cable size={18} /> },
+	{ page: "providers", label: "Providers", icon: <Cloud size={18} /> },
+	{ page: "local", label: "Local models", icon: <HardDrive size={18} /> },
 ];
 const NAV_BOTTOM: { page: Page; label: string; icon: ReactNode }[] = [
-	{ page: "logs", label: "Logs", icon: <ScrollText size={18} /> },
 	{ page: "settings", label: "Settings", icon: <Settings size={18} /> },
 	{ page: "about", label: "About", icon: <Info size={18} /> },
 ];

@@ -56,6 +56,7 @@ To work on the UI in a browser instead, run `npm run server:watch` and `npm run 
 - These run Sorvex's own login flows and save to `~/.sorvex/agent/auth.json`, so the CLI uses the same credentials.
 
 **Guardrails**
+- **Approval mode** (next to the guardrails badge): **Supervised** follows each tool's Ask / Allow / Deny; **Auto-accept edits** also approves `edit` and `write`; **Auto** approves every tool set to Ask unless a safety rule asks; **Full access** asks for nothing. Block rules and tools set to Deny hold in every mode, and SSH and browser tools keep their own guardrails. It applies from the next tool call.
 - **Tool permissions:** set each tool to Ask, Allow or Deny.
   - "Ask" shows an inline Allow once / Allow always / Deny box above the composer.
   - Defaults: read-only tools are allowed; `bash`, `edit`, `write` and unknown tools ask.
@@ -77,8 +78,31 @@ To work on the UI in a browser instead, run `npm run server:watch` and `npm run 
   - Kokoro installs on demand from Settings → Voice into `~/.sorvex/agent/desktop/kokoro`, about 250MB plus a model of about 90MB.
 - **Visuals:** a mic level meter while recording, and a flame waveform above the composer while replies are spoken.
 
-**Right sidebar** (toggle with the panel button in the header, or collapse with the chevron)
-- Search, Guardrails, Todos (from Sorvex's `todo` tool), Modes, Prompts (saved prompts plus Sorvex templates and skills), Agents (subagent runs), Permissions and Config.
+**Floating preview**
+- Browser and Device can float over the chat as a small picture-in-picture window: just the page or the phone screen, still fully usable (click, scroll, type, touch).
+- Floating, the page keeps the size it had in the side pane (remembered across launches; 1280x800 before the pane was ever opened), or its fixed viewport, and is drawn scaled down into a window of that shape (like t3code), so the floating preview shows what the pane showed instead of reflowing to a cramped phone layout.
+- When the agent starts using the browser or a device, it opens floating, unless that pane is already open in the sidebar. Opening Browser or Device yourself opens the sidebar pane.
+- The sidebar panes have a "Float preview over chat" button (browser toolbar, device rail). Clicking Browser or Device in the header or the surface launcher docks the floating one back into the sidebar.
+- Drag it by the grip that appears on hover; resize it from any edge or corner, between a minimum size and 60% of the chat's width, above the composer. The device window keeps the phone's proportions. Place and size are remembered.
+
+**Settings**
+- A searchable section list on the left (General, Appearance, Conversation, Model connection, Voice, Remote access); the chosen section's settings on the right, in small groups. Search matches section names and the settings inside them.
+- Local models uses the same layout: Your models, Recommended and Hugging Face search under Models; Engine (with its state, e.g. running or not installed) and This device under Setup.
+
+**Surface launcher**
+- The header's right-panel button opens an "Open a surface" list: Terminal, Browser, Device, Changes (greyed out when the working tree has no diff), Files, and the Guardrails, Prompts and Permissions panels. Click one or press its letter; the button closes whatever pane is open.
+
+**Right sidebar** (open a panel from its icon strip or the surface launcher, collapse with the chevron)
+- Guardrails, Todos (from Sorvex's `todo` tool), Prompts (saved prompts plus Sorvex templates and skills), Agents (subagent runs) and Permissions.
+- Auto-compact, auto-retry and how messages sent while the agent works are delivered are in Settings → Conversation; thinking level, compaction (`/compact`) and HTML export (`/export`) are in the chat.
+
+**Find**
+- Ctrl+F opens a find bar over the conversation: matches are highlighted, Enter / Shift+Enter step through them, Escape closes. Collapsed tool output is searched once expanded.
+
+**Sessions sidebar**
+- Hover a session for its `...` menu: Rename edits the title in place (Enter saves, Escape cancels; double-click the title does the same), Delete moves it to the trash.
+- Fork (in the same menu) copies the whole session into a new one named `<title> (fork)` and opens it; the original is unchanged.
+- **Fork from here** under each finished reply starts a new session holding the conversation up to the end of that reply.
 
 **Attachments**
 - Paperclip, drag-and-drop, or paste.
@@ -92,6 +116,7 @@ To work on the UI in a browser instead, run `npm run server:watch` and `npm run 
 - AI tools:
   - **Pages:** `browser_navigate`, `browser_back`, `browser_scroll`, `browser_wait`.
   - **Reading:** `browser_snapshot` (numbered interactive elements), `browser_read` (page text), `browser_screenshot` (image), `browser_console`.
+  - **Viewport:** `browser_viewport` sets a device preset (`iphone-12-pro`, `pixel-7`, `ipad-air`, `desktop-1440`, ...), a custom width and height, or `responsive`; `list` shows them all. Take `browser_screenshot` after each to compare layouts.
   - **Acting:** `browser_click` and `browser_type` (by element number), `browser_press`.
 - The browser uses its own profile in `~/.sorvex/agent/desktop/browser`, never your personal one. Downloads are off.
 - Browser guardrails:
@@ -100,6 +125,7 @@ To work on the UI in a browser instead, run `npm run server:watch` and `npm run 
   - **Domain lists:** blocked and allowed domains.
   - **Activity log:** every AI browser action.
 - Page text and console output pass through the same secret masking as every other tool.
+- **Viewport** (toolbar button): responsive (follows the pane) or a fixed size, chosen from Desktop, Tablet and Phone presets or typed as width x height, with a rotate button. A fixed viewport is centered in the pane and scaled down when larger; the floating preview takes its proportions. When the AI changes it, the viewport bar opens so you can see and undo it.
 
 **SSH**
 - Add servers on the SSH page with a password, a private key (plus passphrase) or your ssh-agent.
@@ -160,6 +186,7 @@ To work on the UI in a browser instead, run `npm run server:watch` and `npm run 
 - Edit the raw `~/.sorvex/agent/mcp.json`.
 - Set Ask / Allow / Deny on each server's tools.
 - It uses Sorvex's own MCP config code and `sorvex mcp list`, and the agent reloads after each change.
+- **Composio tab:** paste your Composio API key (the `ck_` consumer key from your Composio account) to add Composio Connect (`https://connect.composio.dev/mcp`) as the `composio` server. The key is checked first, then kept in `~/.sorvex/agent/desktop/composio.json` and in that server's header in `mcp.json`, both readable only by you. The tab lists Composio's 1,600+ apps (popular ones first, all searchable, 50 per page) with your connection state. **Connect** opens the app's sign-in page in your browser and updates by itself once the account is active; **Cancel** removes the pending link; each connected account can be disconnected. The agent reaches every connected app through the one `composio` server.
 
 **Annotations**
 - Select text in a reply and comment on it.
@@ -182,6 +209,7 @@ To work on the UI in a browser instead, run `npm run server:watch` and `npm run 
 | `server/credentials.ts` | Providers, logins, keys and reviewer completions through `ModelRuntime`. |
 | `server/voice.ts`, `server/kokoro.ts` | Speech endpoints and the local Kokoro process. |
 | `server/mcp.ts` | MCP server list, add, remove and enable, using Sorvex's MCP config functions. |
+| `server/composio.ts` | Composio Connect: the key, the app catalog (from Composio's public directory and sitemap), and connection state, connect and disconnect through its MCP endpoint. |
 | `server/devices.ts` | Android SDK detection and setup, emulators (list, create, start, stop, rotate), the Expo Device Hub process with its API and metrics relay, and the `device_*` tool actions over adb. |
 | `server/skills.ts` | Installed skills, and the skill registry index, search and install. |
 | `server/settings.ts` | `~/.sorvex/agent/desktop/settings.json` and its defaults. |

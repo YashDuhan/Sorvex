@@ -56,7 +56,15 @@ export interface SavedPrompt {
 	content: string;
 }
 
+/**
+ * How much the agent asks before acting, on top of per-tool permissions: "supervised" follows them as set, "edits"
+ * also approves file edits, "auto" approves everything a safety rule does not flag, "full" asks for nothing. Block
+ * rules and tools set to Deny hold in every mode.
+ */
+export type ApprovalMode = "supervised" | "edits" | "auto" | "full";
+
 export interface DesktopSettings {
+	approvalMode: ApprovalMode;
 	permissions: { default: Permission; tools: Record<string, Permission> };
 	rules: SafetyRule[];
 	reviewers: Reviewer[];

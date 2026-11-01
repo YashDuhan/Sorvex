@@ -7,6 +7,7 @@ import { settingsPath } from "./paths.ts";
  * call). Missing top-level keys fall back to the defaults below.
  */
 export const DEFAULT_SETTINGS = {
+	approvalMode: "supervised",
 	permissions: {
 		default: "ask",
 		tools: { read: "allow", grep: "allow", find: "allow", ls: "allow", todo: "allow", bash: "ask", edit: "ask", write: "ask" },

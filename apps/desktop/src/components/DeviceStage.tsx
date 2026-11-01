@@ -8,6 +8,7 @@ import {
 	House,
 	Loader2,
 	Moon,
+	PictureInPicture2,
 	Power,
 	RotateCw,
 	SlidersHorizontal,
@@ -18,7 +19,7 @@ import {
 	Volume1,
 	Volume2,
 } from "lucide-react";
-import { type KeyboardEvent, type PointerEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState, type WheelEvent } from "react";
+import { type ClipboardEvent, type KeyboardEvent, type PointerEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState, type WheelEvent } from "react";
 import { api, serverEvents } from "../api.ts";
 import type { SelectedElement } from "../element.ts";
 import { Annotate, type AnnotateSource } from "./Annotate.tsx";
@@ -463,6 +464,94 @@ function useDeviceAnnotateSource(canvas: HTMLCanvasElement | null, serial: strin
 	}, [canvas, serial]);
 }
 
+/**
+ * Touch, scroll and keyboard input for a device screen canvas: pointer events become touches, the wheel a short
+ * swipe, keys Android keycodes or text, and a paste typed text. Spread the result onto the canvas.
+ */
+function useScreenInput(send: (payload: unknown) => void) {
+	const pointerDown = useRef(false);
+	const wheel = useRef({ dy: 0, timer: undefined as ReturnType<typeof setTimeout> | undefined, x: 0.5, y: 0.5 });
+
+	const point = (event: PointerEvent<HTMLCanvasElement> | WheelEvent<HTMLCanvasElement>) => {
+		const target = event.currentTarget;
+		const x = event.nativeEvent.offsetX / target.clientWidth;
+		const y = event.nativeEvent.offsetY / target.clientHeight;
+		return { x: Math.min(Math.max(x, 0), 1), y: Math.min(Math.max(y, 0), 1) };
+	};
+
+	const onPointer = (action: "down" | "move" | "up") => (event: PointerEvent<HTMLCanvasElement>) => {
+		if (action === "down") {
+			event.currentTarget.setPointerCapture(event.pointerId);
+			event.currentTarget.focus();
+			pointerDown.current = true;
+		} else if (!pointerDown.current) return;
+		if (action === "up") pointerDown.current = false;
+		send({ type: "touch", action, ...point(event) });
+	};
+
+	// Scrolling becomes a short swipe at the pointer, batched so a wheel flick is one gesture.
+	const onWheel = (event: WheelEvent<HTMLCanvasElement>) => {
+		const state = wheel.current;
+		if (state.timer === undefined) Object.assign(state, point(event));
+		state.dy += event.deltaY;
+		clearTimeout(state.timer);
+		state.timer = setTimeout(() => {
+			const distance = Math.max(-0.45, Math.min(0.45, -state.dy / 1200));
+			const y2 = Math.min(0.97, Math.max(0.03, state.y + distance));
+			send({ type: "swipe", x1: state.x, y1: state.y, x2: state.x, y2, durationMs: 160 });
+			state.dy = 0;
+			state.timer = undefined;
+		}, 60);
+	};
+
+	const onKeyDown = (event: KeyboardEvent<HTMLCanvasElement>) => {
+		// Shortcuts (Ctrl+V pastes through onPaste) stay with the app.
+		if (event.metaKey || event.ctrlKey || event.altKey) return;
+		event.preventDefault();
+		if (event.key === "Escape") return send({ type: "back" });
+		const keycode = KEYCODES[event.key];
+		if (keycode !== undefined) return send({ type: "key", keycode });
+		if (event.key.length === 1) send({ type: "text", text: event.key });
+	};
+
+	return {
+		onPointerDown: onPointer("down"),
+		onPointerMove: onPointer("move"),
+		onPointerUp: onPointer("up"),
+		onPointerCancel: onPointer("up"),
+		onWheel,
+		onKeyDown,
+		onPaste: (event: ClipboardEvent<HTMLCanvasElement>) => {
+			const text = event.clipboardData.getData("text");
+			if (text) send({ type: "text", text });
+		},
+	};
+}
+
+/**
+ * Just the screen, for the floating preview over the chat: the stream on a canvas that fills its box, with full input.
+ * Reports the screen's width / height once known so the window keeps the phone's proportions.
+ */
+export function DeviceScreen({ serial, name, port, token, onAspect }: { serial: string; name: string; port: number; token: string; onAspect: (aspect: number) => void }) {
+	const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
+	const frameListener = useRef<(() => void) | null>(null);
+	const { state, error, send } = useDeviceStream(canvas, port, token, serial, frameListener);
+	const input = useScreenInput(send);
+	useEffect(() => {
+		if (!canvas) return;
+		const report = () => canvas.width && canvas.height && onAspect(canvas.width / canvas.height);
+		report();
+		canvas.addEventListener("framesize", report);
+		return () => canvas.removeEventListener("framesize", report);
+	}, [canvas, onAspect]);
+	return (
+		<>
+			<canvas ref={setCanvas} className="device-screen" tabIndex={0} aria-label={`${name} screen. Click to interact; type when focused.`} {...input} />
+			{state !== "streaming" && <div className="device-screen-overlay">{state === "error" ? <span>{error}</span> : <Loader2 size={18} className="spin" />}</div>}
+		</>
+	);
+}
+
 export function DeviceStage({
 	serial,
 	name,
@@ -471,6 +560,7 @@ export function DeviceStage({
 	onToggleExpand,
 	onShutDown,
 	onAttached,
+	onFloat,
 	toast,
 }: {
 	serial: string;
@@ -481,6 +571,8 @@ export function DeviceStage({
 	onShutDown: () => void;
 	/** After an element or drawing went to the composer, so a full-window pane can step aside. */
 	onAttached: () => void;
+	/** Moves the screen into a floating preview over the chat. */
+	onFloat: () => void;
 	toast: (kind: "info" | "error", text: string) => void;
 }) {
 	const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
@@ -535,8 +627,6 @@ export function DeviceStage({
 	const [fontScale, setFontScale] = useState(1);
 	const [toggles, setToggles] = useState<Partial<Toggles>>({});
 	const stageRef = useRef<HTMLDivElement>(null);
-	const pointerDown = useRef(false);
-	const wheel = useRef({ dy: 0, timer: undefined as ReturnType<typeof setTimeout> | undefined, x: 0.5, y: 0.5 });
 
 	const fail = useCallback((reason: unknown) => toast("error", reason instanceof Error ? reason.message : String(reason)), [toast]);
 
@@ -564,47 +654,7 @@ export function DeviceStage({
 		});
 	};
 
-	const point = (event: PointerEvent<HTMLCanvasElement> | WheelEvent<HTMLCanvasElement>) => {
-		const target = event.currentTarget;
-		const x = event.nativeEvent.offsetX / target.clientWidth;
-		const y = event.nativeEvent.offsetY / target.clientHeight;
-		return { x: Math.min(Math.max(x, 0), 1), y: Math.min(Math.max(y, 0), 1) };
-	};
-
-	const onPointer = (action: "down" | "move" | "up") => (event: PointerEvent<HTMLCanvasElement>) => {
-		if (action === "down") {
-			event.currentTarget.setPointerCapture(event.pointerId);
-			event.currentTarget.focus();
-			pointerDown.current = true;
-		} else if (!pointerDown.current) return;
-		if (action === "up") pointerDown.current = false;
-		send({ type: "touch", action, ...point(event) });
-	};
-
-	// Scrolling becomes a short swipe at the pointer, batched so a wheel flick is one gesture.
-	const onWheel = (event: WheelEvent<HTMLCanvasElement>) => {
-		const state = wheel.current;
-		if (state.timer === undefined) Object.assign(state, point(event));
-		state.dy += event.deltaY;
-		clearTimeout(state.timer);
-		state.timer = setTimeout(() => {
-			const distance = Math.max(-0.45, Math.min(0.45, -state.dy / 1200));
-			const y2 = Math.min(0.97, Math.max(0.03, state.y + distance));
-			send({ type: "swipe", x1: state.x, y1: state.y, x2: state.x, y2, durationMs: 160 });
-			state.dy = 0;
-			state.timer = undefined;
-		}, 60);
-	};
-
-	const onKeyDown = (event: KeyboardEvent<HTMLCanvasElement>) => {
-		// Shortcuts (Ctrl+V pastes through onPaste) stay with the app.
-		if (event.metaKey || event.ctrlKey || event.altKey) return;
-		event.preventDefault();
-		if (event.key === "Escape") return send({ type: "back" });
-		const keycode = KEYCODES[event.key];
-		if (keycode !== undefined) return send({ type: "key", keycode });
-		if (event.key.length === 1) send({ type: "text", text: event.key });
-	};
+	const input = useScreenInput(send);
 
 	const screenshot = () =>
 		void hub<{ image: string; mimeType: string }>(serial, "/api/screenshot", {}).then((shot) => {
@@ -627,16 +677,7 @@ export function DeviceStage({
 							className="device-screen"
 							tabIndex={0}
 							aria-label={`${name} screen. Click to interact; type when focused.`}
-							onPointerDown={onPointer("down")}
-							onPointerMove={onPointer("move")}
-							onPointerUp={onPointer("up")}
-							onPointerCancel={onPointer("up")}
-							onWheel={onWheel}
-							onKeyDown={onKeyDown}
-							onPaste={(event) => {
-								const text = event.clipboardData.getData("text");
-								if (text) send({ type: "text", text });
-							}}
+							{...input}
 						/>
 						{state !== "streaming" && (
 							<div className="device-screen-overlay">
@@ -650,7 +691,7 @@ export function DeviceStage({
 							name={name}
 							frameListener={frameListener}
 							onTouch={(phase, point) => send({ type: "touch", action: phase === "begin" ? "down" : phase === "move" ? "move" : "up", x: point.x, y: point.y })}
-							onKeyDown={onKeyDown}
+							onKeyDown={input.onKeyDown}
 							onPaste={(text) => send({ type: "text", text })}
 							onUnavailable={() => {
 								setThreeD(false);
@@ -792,6 +833,9 @@ export function DeviceStage({
 							<Smartphone size={15} />
 						</RailButton>
 					</div>
+					<RailButton label="Float preview over chat" onClick={onFloat}>
+						<PictureInPicture2 size={15} />
+					</RailButton>
 					<RailButton label="Fill the window" onClick={onToggleExpand}>
 						<Expand size={15} />
 					</RailButton>

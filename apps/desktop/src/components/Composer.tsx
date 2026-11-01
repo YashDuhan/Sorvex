@@ -1,4 +1,4 @@
-import { AlertTriangle, Bot, Check, ChevronDown, FileText, Loader2, Mic, MicOff, Search, SendHorizonal, Shield, ShieldOff, ShieldQuestion, Square, VolumeX, X } from "lucide-react";
+import { AlertTriangle, Bot, Check, ChevronDown, FileText, Loader2, Lock, LockOpen, Mic, MicOff, Pencil, SendHorizonal, Sparkles, Square, VolumeX, X } from "lucide-react";
 import {
 	type ClipboardEvent,
 	type CSSProperties,
@@ -18,12 +18,14 @@ import { allCommands, parseBuiltin } from "../commands.ts";
 import { switchToLocalModel } from "../local.ts";
 import { onComposerAttach } from "../composerInbox.ts";
 import { compactNumber } from "../format.ts";
-import type { Permission, SpeechEndpoint } from "../settings.ts";
+import type { ApprovalMode, Permission, SpeechEndpoint } from "../settings.ts";
 import { type Attachment, type SorvexActions, currentMode, type Mode, type State } from "../store.ts";
 import { speaker } from "../voice.ts";
 import { AgentMonitor, collectRuns } from "./AgentMonitor.tsx";
 import { ElementChip } from "./ElementChip.tsx";
 import { ModelPicker, ProviderIcon } from "./ModelPicker.tsx";
+import { GuardrailsPicker, guardSections } from "./GuardrailsPicker.tsx";
+import { ToolsPicker } from "./ToolsPicker.tsx";
 import { FlameWaveform, VoiceWaveform } from "./Waveforms.tsx";
 
 /** A trigger with a menu that opens above it and closes on outside click or Escape. */
@@ -65,10 +67,15 @@ function Dropdown({
 	);
 }
 
-const MODES: { mode: Mode; label: string; color?: string }[] = [
-	{ mode: "build", label: "Build" },
-	{ mode: "plan", label: "Plan", color: "var(--mode-plan)" },
-	{ mode: "security", label: "Security", color: "var(--mode-security)" },
+const MODES: { mode: Mode; label: string; color?: string; about: string }[] = [
+	{ mode: "build", label: "Build", about: "Writes and changes code with all tools. The default." },
+	{ mode: "plan", label: "Plan", color: "var(--mode-plan)", about: "Explores read-only and writes a plan for your approval before any change." },
+	{
+		mode: "security",
+		label: "Security",
+		color: "var(--mode-security)",
+		about: "Finds, verifies, and fixes vulnerabilities with all tools plus the built-in security subagents.",
+	},
 ];
 
 function ModeTabs({ mode, onMode, disabled }: { mode: Mode; onMode: (mode: Mode) => void; disabled: boolean }) {
@@ -83,6 +90,7 @@ function ModeTabs({ mode, onMode, disabled }: { mode: Mode; onMode: (mode: Mode)
 						role="tab"
 						aria-selected={active}
 						disabled={disabled}
+						title={entry.about}
 						className={`mode-tab${active ? " active" : ""}`}
 						style={active && entry.color ? ({ "--tab-color": entry.color } as CSSProperties) : undefined}
 						onClick={() => !active && onMode(entry.mode)}
@@ -101,23 +109,10 @@ interface SshGuardState {
 	guardrails: { block: { id: string; name: string; enabled: boolean }[]; ask: { id: string; name: string; enabled: boolean }[]; readOnlyCommands: string[] };
 }
 
-/** A toggle row inside the guardrails menu. */
-function GuardRow({ on, label, hint, tone, onToggle }: { on: boolean; label: string; hint?: string; tone?: "block" | "ask"; onToggle: () => void }) {
-	return (
-		<button type="button" className={`guard-row${on ? "" : " off"}`} onClick={onToggle} aria-pressed={on}>
-			<span className={`guard-check${on ? " on" : ""}`}>{on && <Check size={10} />}</span>
-			<span className="stack">
-				<span>{label}</span>
-				{hint && <small>{hint}</small>}
-			</span>
-			{tone && <span className={`badge ${tone === "block" ? "danger" : "warn"}`}>{tone}</span>}
-		</button>
-	);
-}
-
 /**
- * Every guardrail in one menu: LLM reviewers, the local safety rules (checked before each tool call), and the
- * SSH guardrails with each server's policy. Toggles apply at once; the links open the full editors.
+ * Every guardrail in one menu, by section: LLM reviewers, the local safety rules for shell commands and file paths
+ * (checked before each tool call), and the SSH guardrails with each server's policy. Toggles apply at once; the
+ * footer opens the full editors.
  */
 function GuardrailBadge({ state, actions, onOpen }: { state: State; actions: SorvexActions; onOpen: (target: "guardrails" | "ssh" | "local") => void }) {
 	const [ssh, setSsh] = useState<SshGuardState | null>(null);
@@ -145,7 +140,7 @@ function GuardrailBadge({ state, actions, onOpen }: { state: State; actions: Sor
 	return (
 		<Dropdown
 			align="right"
-			width={340}
+			width={520}
 			trigger={(open, toggle) => (
 				<button
 					type="button"
@@ -167,90 +162,96 @@ function GuardrailBadge({ state, actions, onOpen }: { state: State; actions: Sor
 			)}
 		>
 			{(close) => (
-				<div className="guard-menu">
-					<div className="guard-section">
-						<div className="popover-group">LLM reviewers · check each finished turn</div>
-						{reviewers.length === 0 && <div className="panel-note guard-empty">None yet</div>}
-						{reviewers.map((reviewer) => (
-							<GuardRow
-								key={reviewer.id}
-								on={reviewer.enabled}
-								label={reviewer.name}
-								hint={!reviewer.model ? "No model set" : reviewer.model === chatModel ? `${reviewer.model} · same as chat` : reviewer.model}
-								onToggle={() =>
-									void actions.saveSettings({ ...settings, reviewers: reviewers.map((r) => (r.id === reviewer.id ? { ...r, enabled: !r.enabled } : r)) })
-								}
-							/>
-						))}
-					</div>
-					<div className="guard-section">
-						<div className="popover-group">
-							Safety rules · {rulesOn}/{settings.rules.length} on · before each local tool call
-						</div>
-						{settings.rules.map((rule) => (
-							<GuardRow
-								key={rule.id}
-								on={rule.enabled}
-								label={rule.name}
-								hint={rule.target === "bash" ? "shell commands" : "file paths"}
-								tone={rule.action === "block" ? "block" : "ask"}
-								onToggle={() => void actions.saveSettings({ ...settings, rules: settings.rules.map((r) => (r.id === rule.id ? { ...r, enabled: !r.enabled } : r)) })}
-							/>
-						))}
-					</div>
-					<div className="guard-section">
-						<div className="popover-group">SSH guardrails · every remote command</div>
-						{!ssh && <div className="panel-note guard-empty dots">Loading</div>}
-						{ssh && ssh.hosts.length > 0 && (
-							<div className="guard-hosts">
-								{ssh.hosts.map((host) => (
-									<span key={host.id} className="mcp-badge" title={ssh.statuses[host.alias] ?? ""}>
-										{host.alias}: {host.policy}
-									</span>
-								))}
-							</div>
-						)}
-						{ssh?.guardrails.block.map((rule) => (
-							<GuardRow
-								key={rule.id}
-								on={rule.enabled}
-								label={rule.name}
-								tone="block"
-								onToggle={() => saveSsh({ ...ssh.guardrails, block: ssh.guardrails.block.map((r) => (r.id === rule.id ? { ...r, enabled: !r.enabled } : r)) })}
-							/>
-						))}
-						{ssh?.guardrails.ask.map((rule) => (
-							<GuardRow
-								key={rule.id}
-								on={rule.enabled}
-								label={rule.name}
-								tone="ask"
-								onToggle={() => saveSsh({ ...ssh.guardrails, ask: ssh.guardrails.ask.map((r) => (r.id === rule.id ? { ...r, enabled: !r.enabled } : r)) })}
-							/>
-						))}
-					</div>
-					<div className="guard-links">
+				<GuardrailsPicker
+					sections={guardSections({
+						reviewers,
+						chatModel,
+						rules: settings.rules,
+						ssh: ssh ? { hosts: ssh.hosts, block: ssh.guardrails.block, ask: ssh.guardrails.ask } : null,
+						setReviewers: (ids, on) => void actions.saveSettings({ ...settings, reviewers: reviewers.map((r) => (ids.includes(r.id) ? { ...r, enabled: on } : r)) }),
+						setRules: (ids, on) => void actions.saveSettings({ ...settings, rules: settings.rules.map((r) => (ids.includes(r.id) ? { ...r, enabled: on } : r)) }),
+						setSsh: (ids, on) => {
+							if (!ssh) return;
+							const flip = (rules: { id: string; name: string; enabled: boolean }[]) => rules.map((r) => (ids.includes(r.id) ? { ...r, enabled: on } : r));
+							saveSsh({ ...ssh.guardrails, block: flip(ssh.guardrails.block), ask: flip(ssh.guardrails.ask) });
+						},
+					})}
+					footer={
+						<>
+							<button
+								type="button"
+								className="btn-ghost"
+								onClick={() => {
+									close();
+									onOpen("guardrails");
+								}}
+							>
+								Edit rules and reviewers
+							</button>
+							<button
+								type="button"
+								className="btn-ghost"
+								onClick={() => {
+									close();
+									onOpen("ssh");
+								}}
+							>
+								SSH servers
+							</button>
+						</>
+					}
+				/>
+			)}
+		</Dropdown>
+	);
+}
+
+const APPROVAL_MODES: { mode: ApprovalMode; label: string; hint: string; icon: ReactNode }[] = [
+	{ mode: "supervised", label: "Supervised", hint: "Ask before commands and file changes, as set per tool.", icon: <Lock size={14} /> },
+	{ mode: "edits", label: "Auto-accept edits", hint: "Approve file edits; ask before other actions.", icon: <Pencil size={14} /> },
+	{ mode: "auto", label: "Auto", hint: "Approve routine actions; ask when a safety rule flags one.", icon: <Sparkles size={14} /> },
+	{ mode: "full", label: "Full access", hint: "Run commands and edits without asking. Block rules still apply.", icon: <LockOpen size={14} /> },
+];
+
+/** How much the agent asks before acting; read by the bridge on every tool call. */
+function ApprovalModeSelect({ state, actions }: { state: State; actions: SorvexActions }) {
+	const settings = state.settings;
+	if (!settings) return null;
+	const current = APPROVAL_MODES.find((entry) => entry.mode === settings.approvalMode) ?? APPROVAL_MODES[0]!;
+	return (
+		<Dropdown
+			align="right"
+			width={330}
+			trigger={(_open, toggle) => (
+				<button type="button" className={`approval-btn ${current.mode}`} onClick={toggle} title={`${current.label}: ${current.hint}`}>
+					{current.icon}
+					<span className="approval-word">{current.label}</span>
+					<ChevronDown size={12} />
+				</button>
+			)}
+		>
+			{(close) => (
+				<div className="approval-menu" role="menu" aria-label="Approval mode">
+					{APPROVAL_MODES.map((entry) => (
 						<button
+							key={entry.mode}
 							type="button"
-							className="btn-ghost"
+							role="menuitemradio"
+							aria-checked={entry.mode === current.mode}
+							className={`approval-item${entry.mode === current.mode ? " on" : ""}`}
 							onClick={() => {
 								close();
-								onOpen("guardrails");
+								if (entry.mode !== current.mode) void actions.saveSettings({ ...settings, approvalMode: entry.mode });
 							}}
 						>
-							Edit rules and reviewers
+							<span className={`approval-icon ${entry.mode}`}>{entry.icon}</span>
+							<span className="approval-text">
+								<span>{entry.label}</span>
+								<small>{entry.hint}</small>
+							</span>
+							{entry.mode === current.mode && <Check size={13} className="approval-check" />}
 						</button>
-						<button
-							type="button"
-							className="btn-ghost"
-							onClick={() => {
-								close();
-								onOpen("ssh");
-							}}
-						>
-							SSH servers
-						</button>
-					</div>
+					))}
 				</div>
 			)}
 		</Dropdown>
@@ -275,75 +276,23 @@ function EffortPill({ state, actions }: { state: State; actions: SorvexActions }
 	);
 }
 
-/** Tools grouped as built-in or per MCP server, each with its Ask / Allow / Deny permission. */
+/** Tools by category (built-in groups, then each MCP server), each with its Ask / Allow / Deny permission. */
 function ToolsPill({ state, actions }: { state: State; actions: SorvexActions }) {
 	const settings = state.settings;
-	const [query, setQuery] = useState("");
-	const groups = useMemo(() => {
-		const byGroup = new Map<string, string[]>();
-		const needle = query.toLowerCase();
-		for (const tool of state.tools) {
-			if (needle && !tool.name.toLowerCase().includes(needle)) continue;
-			const server = /^mcp__(.+?)__/.exec(tool.name)?.[1];
-			const group = server ? `MCP · ${server}` : "Built-in";
-			byGroup.set(group, [...(byGroup.get(group) ?? []), tool.name]);
-		}
-		return [...byGroup.entries()];
-	}, [state.tools, query]);
 	if (!settings) return null;
 	const { permissions } = settings;
-	const set = (name: string, permission: Permission) =>
-		void actions.saveSettings({ ...settings, permissions: { ...permissions, tools: { ...permissions.tools, [name]: permission } } });
-	const icons: Record<Permission, ReactNode> = {
-		ask: <ShieldQuestion size={12} />,
-		allow: <Shield size={12} />,
-		deny: <ShieldOff size={12} />,
-	};
+	const set = (changes: Record<string, Permission>) =>
+		void actions.saveSettings({ ...settings, permissions: { ...permissions, tools: { ...permissions.tools, ...changes } } });
 	return (
 		<Dropdown
-			width={320}
+			width={500}
 			trigger={(_open, toggle) => (
-				<button type="button" className={`comp-pill${state.tools.length > 0 ? " blue" : ""}`} onClick={toggle} title="Tools and permissions">
+				<button type="button" className="comp-pill" onClick={toggle} title="Tools and permissions">
 					{state.tools.length > 0 ? `${state.tools.length} Tools` : "Tools Off"}
 				</button>
 			)}
 		>
-			{() => (
-				<>
-					<div className="popover-search">
-						<Search size={13} />
-						<input autoFocus placeholder="Search tools" value={query} onChange={(event) => setQuery(event.target.value)} />
-					</div>
-					{groups.map(([group, names]) => (
-						<div key={group}>
-							<div className="popover-group">{group}</div>
-							{names.map((name) => {
-								const effective = permissions.tools[name] ?? permissions.default;
-								return (
-									<div key={name} className="tool-perm">
-										<span title={name}>{name.replace(/^mcp__.+?__/, "")}</span>
-										<div className="perm-chips">
-											{(["ask", "allow", "deny"] as const).map((permission) => (
-												<button
-													key={permission}
-													type="button"
-													title={permission}
-													aria-label={`${permission} ${name}`}
-													className={`perm-chip ${permission}${effective === permission ? " on" : ""}`}
-													onClick={() => set(name, permission)}
-												>
-													{icons[permission]}
-												</button>
-											))}
-										</div>
-									</div>
-								);
-							})}
-						</div>
-					))}
-					{groups.length === 0 && <div className="empty-note">No tools</div>}
-				</>
-			)}
+			{() => <ToolsPicker tools={state.tools} permissions={permissions} onSet={set} />}
 		</Dropdown>
 	);
 }
@@ -837,6 +786,7 @@ export function Composer({
 				<div className="composer-top">
 					<ModeTabs mode={mode} onMode={(next) => void actions.setMode(next)} disabled={!ready} />
 					<div className="composer-group">
+						<ApprovalModeSelect state={state} actions={actions} />
 						<GuardrailBadge state={state} actions={actions} onOpen={onOpen} />
 						<button
 							type="button"

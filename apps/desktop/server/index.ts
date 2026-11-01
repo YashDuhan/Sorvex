@@ -19,7 +19,7 @@ import { Credentials } from "./credentials.ts";
 import { Hub } from "./hub.ts";
 import { Kokoro } from "./kokoro.ts";
 import { addMcpServer, listMcpServers, mcpGlobalPath, removeMcpServer, setMcpServerEnabled, setMcpServerExposure } from "./mcp.ts";
-import { builtinAgents, changelog, deleteSession, exportJsonl, listFiles, listSessions, readSorvexSettings, writeSorvexSetting } from "./parity.ts";
+import { builtinAgents, changelog, deleteSession, exportJsonl, forkSession, listFiles, listSessions, readSorvexSettings, renameSession, writeSorvexSetting } from "./parity.ts";
 import { distDir, repoRoot, settingsPath } from "./paths.ts";
 import { type LocalSettings, LocalModels, llamaUrl } from "./local.ts";
 import { notify } from "./notify.ts";
@@ -28,6 +28,7 @@ import { DEFAULT_SETTINGS, readSettings, writeSettings } from "./settings.ts";
 import { type BrowserAction, BrowserManager, browserGuardrails } from "./browser.ts";
 import { DEFAULT_SSH_GUARDRAILS, type SshPolicy, SshManager, sshGuardrails } from "./ssh.ts";
 import { SideChats } from "./sidechat.ts";
+import { Composio } from "./composio.ts";
 import { AndroidDevices, type DeviceAction } from "./devices.ts";
 import { type CommandInfo, listInstalledSkills, readSkillFile, removeSkill, SkillRegistry } from "./skills.ts";
 import { TerminalManager } from "./terminals.ts";
@@ -42,6 +43,7 @@ const ssh = new SshManager(hub);
 // The browser tools share the SSH tools' per-launch token, which only the bridge extension holds.
 const browser = new BrowserManager(hub, ssh.token);
 const devices = new AndroidDevices(hub, ssh.token);
+const composio = new Composio();
 // The agent's built-in llama.cpp provider talks to the local engine on the Local models page.
 const agent = new Agent(hub, { SORVEX_DESKTOP_URL: `http://${HOST}:${PORT}`, LLAMA_BASE_URL: process.env.LLAMA_BASE_URL ?? llamaUrl });
 const local = new LocalModels(hub);
@@ -102,7 +104,7 @@ function refreshAgentModels(): void {
 	agent
 		.request({ type: "prompt", message: "/gui-refresh-models" })
 		.then(() => hub.broadcast("models-changed", {}))
-		.catch((error: unknown) => hub.broadcast("agent-stderr", { line: `model refresh failed: ${String(error)}` }));
+		.catch((error: unknown) => console.error(`[sorvex-desktop] model refresh failed: ${String(error)}`));
 }
 
 type Handler = (body: Record<string, unknown>, url: URL) => Promise<unknown> | unknown;
@@ -154,6 +156,8 @@ const routes: Record<string, Handler> = {
 	"GET /api/sessions": (_body, url) =>
 		listSessions(url.searchParams.get("cwd") || agent.cwd, url.searchParams.get("all") === "1"),
 	"POST /api/sessions/delete": (body) => deleteSession(String(body.path)),
+	"POST /api/sessions/fork": (body) => forkSession(String(body.path), String(body.name)),
+	"POST /api/sessions/rename": (body) => renameSession(String(body.path), String(body.name)),
 	"POST /api/sessions/export-jsonl": (body) => exportJsonl(String(body.sessionFile), String(body.path)),
 	"GET /api/sorvex-settings": (_body, url) => readSorvexSettings(url.searchParams.get("cwd") || agent.cwd),
 	"PUT /api/sorvex-settings": async (body) => {
@@ -164,11 +168,9 @@ const routes: Record<string, Handler> = {
 	"GET /api/agents": () => builtinAgents(),
 	"GET /api/files": async (_body, url) => ({ files: await listFiles(url.searchParams.get("cwd") || agent.cwd) }),
 
-	// UI-side diagnostics (e.g. whether the webview exposes the microphone), shown in the Logs page and the server log.
+	// UI-side diagnostics (e.g. whether the webview exposes the microphone), written to the server log.
 	"POST /api/log": (body) => {
-		const line = `[ui] ${String(body.line).slice(0, 2000)}`;
-		console.log(line);
-		hub.broadcast("agent-stderr", { line });
+		console.log(`[ui] ${String(body.line).slice(0, 2000)}`);
 		return { ok: true };
 	},
 
@@ -259,6 +261,25 @@ const routes: Record<string, Handler> = {
 		const result = await skillRegistry.install(String(body.id), String(body.cwd || agent.cwd || repoRoot), body.scope === "project" ? "project" : "user");
 		await reloadAgent();
 		return result;
+	},
+
+	"GET /api/composio": () => composio.status(),
+	"POST /api/composio/key": async (body) => {
+		const result = await composio.setKey(String(body.apiKey ?? ""));
+		await reloadAgent();
+		return result;
+	},
+	"POST /api/composio/remove-key": async () => {
+		composio.removeKey();
+		await reloadAgent();
+		return { ok: true };
+	},
+	"GET /api/composio/apps": async () => ({ apps: await composio.apps() }),
+	"POST /api/composio/connections": async (body) => ({ connections: await composio.connections(Array.isArray(body.slugs) ? body.slugs.map(String) : []) }),
+	"POST /api/composio/connect": (body) => composio.connect(String(body.slug)),
+	"POST /api/composio/disconnect": async (body) => {
+		await composio.disconnect(String(body.slug), String(body.accountId));
+		return { ok: true };
 	},
 
 	// PDF attachments: the UI sends the file, the agent gets its text. Uses poppler's pdftotext.
@@ -534,9 +555,7 @@ const server = createServer(async (request, response) => {
 
 // One failed async task (for example a browser tab closing mid-request) must not take the whole app down.
 process.on("unhandledRejection", (error) => {
-	const line = `unhandled error: ${error instanceof Error ? error.message : String(error)}`;
-	console.error(`[sorvex-desktop] ${line}`);
-	hub.broadcast("agent-stderr", { line });
+	console.error(`[sorvex-desktop] unhandled error: ${error instanceof Error ? error.message : String(error)}`);
 });
 
 function shutdown(): void {

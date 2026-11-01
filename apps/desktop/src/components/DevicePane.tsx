@@ -1,7 +1,8 @@
 import { Check, Download, ExternalLink, Loader2, Plus, RefreshCw, RotateCw, Smartphone, TriangleAlert, X } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { api, serverEvents } from "../api.ts";
-import { DeviceStage } from "./DeviceStage.tsx";
+import { DeviceScreen, DeviceStage } from "./DeviceStage.tsx";
+import { FloatingPreview } from "./FloatingPreview.tsx";
 import { PaneFrame, PaneHeader } from "./PaneFrame.tsx";
 import { Select } from "./Select.tsx";
 
@@ -388,6 +389,9 @@ export function DevicePane({
 	width,
 	onResize,
 	onClose,
+	floating,
+	floatHost,
+	onFloat,
 	toast,
 }: {
 	hidden: boolean;
@@ -396,6 +400,10 @@ export function DevicePane({
 	width: number;
 	onResize: (width: number) => void;
 	onClose: () => void;
+	/** Shown as a floating preview over the chat (just the screen) instead of the side pane. */
+	floating: boolean;
+	floatHost: HTMLElement | null;
+	onFloat: () => void;
 	toast: (kind: "info" | "error", text: string) => void;
 }) {
 	const [status, setStatus] = useState<DeviceStatus | null>(null);
@@ -405,6 +413,8 @@ export function DevicePane({
 	const [booting, setBooting] = useState<string | null>(null);
 	const [adding, setAdding] = useState(false);
 	const starting = useRef(false);
+	// The floating screen's width / height; a typical phone until the stream reports its size.
+	const [aspect, setAspect] = useState(9 / 20);
 
 	const refresh = useCallback(() => {
 		void api<DeviceStatus>("GET", "/api/device/status").then(setStatus, (error: unknown) => toast("error", errorText(error)));
@@ -521,11 +531,36 @@ export function DevicePane({
 				onShutDown={() => stop(current.serial!)}
 				// The full-window pane hides the composer; step back so the user can write the prompt.
 				onAttached={() => expanded && onToggleExpand()}
+				onFloat={onFloat}
 				toast={toast}
 			/>
 		);
 	} else {
 		body = <DeviceList avds={avds} busy={booting} onStart={start} onStop={stop} onRefresh={refreshDevices} onAdd={() => setAdding(true)} />;
+	}
+
+	if (floating && floatHost) {
+		const ready = hub?.running && hub.port && hub.token && current?.serial;
+		return (
+			<FloatingPreview
+				host={floatHost}
+				storageKey="floatingDevice"
+				label="Floating device preview"
+				defaultSize={{ width: 220, height: 220 / aspect }}
+				minSize={{ width: 150, height: 240 }}
+				aspect={ready ? aspect : null}
+				radius={ready ? 18 : 12}
+			>
+				{ready ? (
+					<DeviceScreen key={current.serial} serial={current.serial!} name={current.displayName} port={hub.port!} token={hub.token!} onAspect={setAspect} />
+				) : (
+					<div className="fp-wait">
+						<Loader2 size={16} className="spin" />
+						{booting ? `Starting ${booting}` : "Waiting for a device"}
+					</div>
+				)}
+			</FloatingPreview>
+		);
 	}
 
 	return (
