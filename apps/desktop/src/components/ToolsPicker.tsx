@@ -47,7 +47,8 @@ function categorize(tools: Tool[]): Category[] {
 			}
 			category.tools.push(tool);
 		} else if (FILE_TOOLS.has(tool.name)) byId.get("files")!.tools.push(tool);
-		else if (SHELL_TOOLS.has(tool.name)) byId.get("shell")!.tools.push(tool);
+		// Background tasks run shell commands too.
+		else if (SHELL_TOOLS.has(tool.name) || tool.name.startsWith("task_")) byId.get("shell")!.tools.push(tool);
 		else if (tool.name.startsWith("browser_")) byId.get("browser")!.tools.push(tool);
 		else if (tool.name.startsWith("device_")) byId.get("device")!.tools.push(tool);
 		else if (tool.name.startsWith("ssh_")) byId.get("ssh")!.tools.push(tool);

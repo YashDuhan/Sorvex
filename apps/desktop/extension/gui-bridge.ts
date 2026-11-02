@@ -71,6 +71,19 @@ const PATH_TOOLS = new Set(["read", "write", "edit", "grep", "find", "ls"]);
 /** Tools "Auto-accept edits" approves: the ones that change files. */
 const EDIT_TOOLS = new Set(["edit", "write"]);
 
+/** Commands that do not exit on their own: dev servers, watchers, app runners. bash refuses them in favor of task_start. */
+const LONG_RUNNING = [
+	/\b(npm|pnpm|yarn|bun)\s+(run\s+)?(dev|start|serve|watch|preview)\b/,
+	/\b(npx\s+)?expo\s+(start|run:android|run:ios)\b/,
+	/\b(npx\s+)?react-native\s+(start|run-android|run-ios)\b/,
+	/\b(next|nuxt|astro|remix)\s+dev\b/,
+	/\b(nodemon|webpack\s+serve|ng\s+serve|flask\s+run|uvicorn|gunicorn|php\s+artisan\s+serve)\b/,
+	/\bpython3?\s+-m\s+http\.server\b/,
+	/\brails\s+s(erver)?\b/,
+	/\btail\s+-f\b/,
+	/\bdocker(-|\s+)compose\s+up\b(?![^\n]*\s(-d|--detach)\b)/,
+];
+
 const desktopUrl = process.env.SORVEX_DESKTOP_URL;
 /**
  * Set by `/gui-ssh-init`, which the desktop server sends right after starting the agent. Kept in process memory
@@ -123,7 +136,8 @@ function compile(pattern: string): RegExp | undefined {
 /** The strings a rule is matched against for this call: the command for bash, resolved paths for file tools. */
 function subjects(toolName: string, input: Record<string, unknown>, cwd: string, target: SafetyRule["target"]): string[] {
 	if (target === "bash") {
-		return toolName === "bash" && typeof input.command === "string" ? [input.command] : [];
+		// task_start runs a shell command too, so bash rules cover it.
+		return (toolName === "bash" || toolName === "task_start") && typeof input.command === "string" ? [input.command] : [];
 	}
 	if (!PATH_TOOLS.has(toolName)) return [];
 	const raw = [input.path, input.file_path].filter((value): value is string => typeof value === "string");
@@ -163,6 +177,7 @@ export default function guiBridge(pi: ExtensionAPI): void {
 		registerSshTools(pi);
 		registerBrowserTools(pi);
 		registerDeviceTools(pi);
+		registerTaskTools(pi);
 	}
 
 	pi.on("tool_result", (event) => {
@@ -190,6 +205,14 @@ export default function guiBridge(pi: ExtensionAPI): void {
 		const input = event.input as Record<string, unknown>;
 		const mode = settings.approvalMode ?? "supervised";
 
+		// A dev server or watcher never exits, so in bash it would hold the chat until stopped.
+		if (desktopUrl && event.toolName === "bash" && typeof input.command === "string" && LONG_RUNNING.some((pattern) => pattern.test(input.command as string))) {
+			return {
+				block: true,
+				reason: "This command keeps running until it is stopped (a dev server, watcher or app runner), so bash would block the chat. Run it with task_start instead, then check it with task_output.",
+			};
+		}
+
 		let askReason: string | undefined;
 		let askRule: string | undefined;
 		for (const rule of settings.rules ?? []) {
@@ -207,7 +230,8 @@ export default function guiBridge(pi: ExtensionAPI): void {
 		}
 
 		const permissions = settings.permissions ?? {};
-		let permission = permissions.tools?.[event.toolName] ?? permissions.default ?? "allow";
+		// task_start runs shell commands, so without its own setting it follows bash's.
+		let permission = permissions.tools?.[event.toolName] ?? (event.toolName === "task_start" ? permissions.tools?.bash : undefined) ?? permissions.default ?? "allow";
 		// The approval mode can only loosen "ask"; a tool set to Deny stays denied.
 		if (permission === "ask" && (mode === "auto" || mode === "full" || (mode === "edits" && EDIT_TOOLS.has(event.toolName)))) permission = "allow";
 		if (permission === "deny") {
@@ -519,4 +543,177 @@ function registerDeviceTools(pi: ExtensionAPI): void {
 		Type.Object({ ...serial, lines: Type.Optional(Type.Number()), filter: Type.Optional(Type.String()) }),
 		(p) => ({ action: "logcat", serial: p.serial, lines: p.lines, filter: p.filter }),
 	);
+}
+
+/**
+ * task_* tools: background tasks on the desktop server (server/tasks.ts) for commands that keep running or take long,
+ * such as dev servers and app builds. The agent is told with a follow-up message when a task it started exits on its
+ * own; tasks it or the user stopped end quietly.
+ */
+interface TaskInfo {
+	id: string;
+	name: string;
+	command: string;
+	cwd: string;
+	status: "running" | "exited" | "failed" | "stopped";
+	exitCode: number | null;
+	startedAt: number;
+	endedAt: number | null;
+	written: number;
+}
+
+const TASK_OUTPUT_CHARS = 6000;
+/** With wait_for, waiting also ends once the task has been silent this long after printing something. */
+const TASK_QUIET_MS = 8000;
+
+function lastLines(text: string, lines: number): string {
+	const kept = text.split("\n").slice(-Math.max(1, lines)).join("\n");
+	return kept.length > TASK_OUTPUT_CHARS ? `…${kept.slice(-TASK_OUTPUT_CHARS)}` : kept;
+}
+
+function describeTask(task: TaskInfo): string {
+	const seconds = Math.round(((task.endedAt ?? Date.now()) - task.startedAt) / 1000);
+	const time = seconds >= 120 ? `${Math.round(seconds / 60)}m` : `${seconds}s`;
+	const state =
+		task.status === "running" ? `running for ${time}` : task.status === "exited" ? `finished after ${time}` : task.status === "failed" ? `failed (exit code ${task.exitCode ?? "?"}) after ${time}` : `stopped after ${time}`;
+	return `[${task.id}] ${task.name} (${state})`;
+}
+
+async function desktopGet<T>(path: string): Promise<T> {
+	const response = await fetch(`${desktopUrl}${path}`, { headers: { "x-sorvex-desktop": "1" } });
+	const data = (await response.json()) as T & { error?: string };
+	if (!response.ok) throw new Error(data.error ?? `Request failed (${response.status})`);
+	return data;
+}
+
+function registerTaskTools(pi: ExtensionAPI): void {
+	/** Tasks this agent started and has not heard the end of; watched so their exit can be reported. */
+	const watched = new Map<string, string>();
+	let timer: ReturnType<typeof setInterval> | undefined;
+
+	const outputOf = async (task: TaskInfo, lines: number) => {
+		const { text } = await desktopApi<{ text: string }>("/api/tasks/output", { id: task.id, since: Math.max(0, task.written - TASK_OUTPUT_CHARS * 4) });
+		return lastLines(text.trimEnd(), lines) || "(no output yet)";
+	};
+
+	const poll = async () => {
+		const tasks = await desktopGet<TaskInfo[]>("/api/tasks").catch(() => null);
+		if (!tasks) return;
+		for (const [id] of watched) {
+			const task = tasks.find((entry) => entry.id === id);
+			if (task?.status === "running") continue;
+			watched.delete(id);
+			if (!task || task.status === "stopped") continue;
+			const output = await outputOf(task, 40).catch(() => "");
+			pi.sendMessage(
+				{
+					customType: "sorvex-background-task",
+					content: [{ type: "text", text: `Background task ${describeTask(task)}.\n\nLast output:\n\`\`\`\n${output}\n\`\`\`` }],
+					display: true,
+				},
+				{ deliverAs: "followUp", triggerTurn: true },
+			);
+		}
+		if (watched.size === 0 && timer) {
+			clearInterval(timer);
+			timer = undefined;
+		}
+	};
+	const watch = (id: string, name: string) => {
+		watched.set(id, name);
+		timer ??= setInterval(() => void poll(), 3000);
+	};
+
+	/** Waits for `pattern` or the timeout, then reports the task's state and its latest output. */
+	const report = async (task: TaskInfo, options: { pattern?: string; seconds: number; lines: number; since: number }) => {
+		const waited = await desktopApi<{ matched: boolean; timedOut: boolean; quiet: boolean }>("/api/tasks/wait", {
+			id: task.id,
+			since: options.since,
+			pattern: options.pattern,
+			timeoutMs: options.seconds * 1000,
+			// A server that is up goes quiet; stop waiting then even if the pattern was a wrong guess.
+			quietMs: options.pattern ? TASK_QUIET_MS : undefined,
+		});
+		const current = (await desktopGet<TaskInfo[]>("/api/tasks")).find((entry) => entry.id === task.id) ?? task;
+		const note = !options.pattern
+			? ""
+			: waited.matched
+				? `"${options.pattern}" appeared in the output.`
+				: waited.quiet
+					? `"${options.pattern}" has not appeared, but the task printed nothing for ${TASK_QUIET_MS / 1000}s, so it is probably ready (or waiting). Read the output below to tell.`
+					: waited.timedOut
+						? `"${options.pattern}" did not appear within ${options.seconds}s.`
+						: "";
+		return [describeTask(current), note, "", "Output (latest lines):", await outputOf(current, options.lines)].filter((line, index) => index !== 1 || line).join("\n");
+	};
+
+	const token = () => {
+		const value = tokenSlot.__sorvexDesktopSshToken;
+		if (!value) throw new Error("Background tasks are not ready in this session. Ask the user to restart the agent from Sorvex Desktop.");
+		return value;
+	};
+
+	pi.registerTool({
+		name: "task_start",
+		label: "Start background task",
+		description:
+			"Run a shell command in the background and leave it running, returning after a short wait with its first output. Use this instead of bash for anything that keeps running or takes more than about a minute: " +
+			"dev servers (npm run dev, npx expo start), app runners (npx expo run:android, npx react-native run-android), watchers, and long builds. bash blocks the chat until its command exits. " +
+			"Give wait_for (text or a regex, e.g. 'ready|Local:|Waiting on|BUILD SUCCESSFUL') to wait until the task is ready, up to timeout seconds; waiting also ends once the task goes quiet for a few seconds. " +
+			"The user sees and can stop it in the Background tasks pane. You get a message when it exits on its own. Check it with task_output; stop it with task_stop when it is no longer needed, unless the user wants it kept running.",
+		parameters: Type.Object({
+			command: Type.String({ description: "Shell command, run in the session's working directory" }),
+			name: Type.Optional(Type.String({ description: "Short label for the Background tasks pane, e.g. 'Dev server'" })),
+			wait_for: Type.Optional(Type.String({ description: "Text or regex to wait for in the output before returning" })),
+			timeout: Type.Optional(Type.Number({ description: "Seconds to wait: default 5, or 120 with wait_for; at most 300" })),
+		}),
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+			const task = await desktopApi<TaskInfo>("/api/tasks/agent/start", { token: token(), command: params.command, name: params.name, cwd: ctx.cwd });
+			watch(task.id, task.name);
+			const text = await report(task, { pattern: params.wait_for, seconds: Math.min(params.timeout ?? (params.wait_for ? 120 : 5), 300), lines: 40, since: 0 });
+			return { content: [{ type: "text", text: `Started background task ${task.id}.\n${text}` }], details: { taskId: task.id } };
+		},
+	});
+
+	pi.registerTool({
+		name: "task_output",
+		label: "Background task output",
+		description: "Show a background task's state and latest output. Optionally wait (up to timeout seconds) for text or a regex to appear first, e.g. a build finishing.",
+		parameters: Type.Object({
+			id: Type.String({ description: "Task id from task_start or task_list" }),
+			lines: Type.Optional(Type.Number({ description: "How many of the latest lines to return (default 60)" })),
+			wait_for: Type.Optional(Type.String({ description: "Text or regex to wait for in new output" })),
+			timeout: Type.Optional(Type.Number({ description: "Seconds to wait for wait_for (default 60, at most 300)" })),
+		}),
+		async execute(_toolCallId, params) {
+			const task = (await desktopGet<TaskInfo[]>("/api/tasks")).find((entry) => entry.id === params.id);
+			if (!task) throw new Error(`No background task ${params.id}. task_list shows them.`);
+			const text = await report(task, { pattern: params.wait_for, seconds: params.wait_for ? Math.min(params.timeout ?? 60, 300) : 0, lines: params.lines ?? 60, since: task.written });
+			return { content: [{ type: "text", text }], details: { taskId: task.id } };
+		},
+	});
+
+	pi.registerTool({
+		name: "task_stop",
+		label: "Stop background task",
+		description: "Stop a background task and every process it started.",
+		parameters: Type.Object({ id: Type.String({ description: "Task id" }) }),
+		async execute(_toolCallId, params) {
+			watched.delete(params.id);
+			const task = await desktopApi<TaskInfo>("/api/tasks/stop", { id: params.id });
+			return { content: [{ type: "text", text: `Stopped ${describeTask(task)}.` }], details: { taskId: task.id } };
+		},
+	});
+
+	pi.registerTool({
+		name: "task_list",
+		label: "Background tasks",
+		description: "List background tasks (running first) with their ids and state.",
+		parameters: Type.Object({}),
+		async execute() {
+			const tasks = await desktopGet<TaskInfo[]>("/api/tasks");
+			const sorted = [...tasks].sort((a, b) => Number(b.status === "running") - Number(a.status === "running"));
+			return { content: [{ type: "text", text: sorted.map(describeTask).join("\n") || "No background tasks." }], details: {} };
+		},
+	});
 }

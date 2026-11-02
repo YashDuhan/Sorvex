@@ -1,6 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { Bookmark, Diff, Folder, Globe, KeyRound, Plus, RotateCw, Shield, Smartphone, SquareTerminal } from "lucide-react";
+import { Activity, Bookmark, Diff, Folder, Globe, KeyRound, Plus, RotateCw, Shield, Smartphone, SquareTerminal } from "lucide-react";
 import { VscLayoutSidebarLeft, VscLayoutSidebarLeftOff, VscLayoutSidebarRight, VscLayoutSidebarRightOff } from "react-icons/vsc";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Composer } from "./components/Composer.tsx";
@@ -25,6 +25,7 @@ import { SshPage } from "./components/Ssh.tsx";
 import { FindBar } from "./components/FindBar.tsx";
 import { type PanelTab, panelTab, RightSidebar } from "./components/RightSidebar.tsx";
 import { SurfaceLauncher } from "./components/SurfaceLauncher.tsx";
+import { TasksPane, useTasks } from "./components/TasksPane.tsx";
 import { Thread } from "./components/Thread.tsx";
 import { sessionTitle, ThreadList } from "./components/ThreadList.tsx";
 import { buildTranscript, liveStatus } from "./btw.ts";
@@ -33,7 +34,7 @@ import { api, serverEvents } from "./api.ts";
 import { LOCAL_PROVIDER } from "./local.ts";
 import { inTauri } from "./window.ts";
 
-type SidePane = "terminal" | "changes" | "browser" | "device" | "files" | "sidechat" | "launcher";
+type SidePane = "terminal" | "changes" | "browser" | "device" | "files" | "sidechat" | "tasks" | "launcher";
 
 /** The surface launcher's list, in order. Ids are panes, or `panel:<tab>` for a right sidebar panel. */
 const SURFACES: { id: string; label: string; icon: ReactNode; key: string; hint?: string }[] = [
@@ -42,6 +43,7 @@ const SURFACES: { id: string; label: string; icon: ReactNode; key: string; hint?
 	{ id: "device", label: "Device", icon: <Smartphone size={16} />, key: "M", hint: "Android emulator" },
 	{ id: "changes", label: "Changes", icon: <Diff size={16} />, key: "D", hint: "Git diff of the working tree" },
 	{ id: "files", label: "Files", icon: <Folder size={16} />, key: "F" },
+	{ id: "tasks", label: "Background tasks", icon: <Activity size={16} />, key: "K", hint: "Dev servers and builds the agent left running" },
 	{ id: "panel:guardrails", label: "Guardrails", icon: <Shield size={16} />, key: "G" },
 	{ id: "panel:prompts", label: "Prompts", icon: <Bookmark size={16} />, key: "P" },
 	{ id: "panel:permissions", label: "Permissions", icon: <KeyRound size={16} />, key: "R" },
@@ -149,6 +151,8 @@ export function App() {
 		setSidePane((current) => (current === kind ? null : current));
 		setPaneExpanded(false);
 	}, []);
+	const tasks = useTasks();
+	const runningTasks = tasks.filter((task) => task.status === "running").length;
 	const sidePaneRef = useRef(sidePane);
 	sidePaneRef.current = sidePane;
 	// Whether the working tree has a diff, so the launcher can grey out Changes; checked each time it opens.
@@ -398,6 +402,7 @@ export function App() {
 											["browser", "Browser", <Globe key="b" size={17} />],
 											["device", "Device", <Smartphone key="d" size={17} />],
 											["files", "Files", <Folder key="f" size={17} />],
+											["tasks", "Background tasks", <Activity key="k" size={17} />],
 										] as const
 									).map(([id, label, icon]) => (
 										<button
@@ -406,10 +411,11 @@ export function App() {
 											className={`icon-btn panel-toggle${sidePane === id ? " active" : ""}`}
 											aria-label={`Toggle ${label.toLowerCase()}`}
 											aria-pressed={sidePane === id}
-											title={label}
+											title={id === "tasks" && runningTasks > 0 ? `${label} · ${runningTasks} running` : label}
 											onClick={() => togglePane(id)}
 										>
 											{icon}
+											{id === "tasks" && runningTasks > 0 && <span className="toggle-count">{runningTasks}</span>}
 										</button>
 									))}
 									<button
@@ -473,6 +479,13 @@ export function App() {
 									<div className="footer-inner">
 										{widgets("aboveEditor")}
 										<PendingApprovals approvals={state.approvals} actions={actions} />
+										{runningTasks > 0 && sidePane !== "tasks" && (
+											<button type="button" className="tasks-chip" onClick={() => showPane("tasks")}>
+												<span className="task-dot running" aria-hidden="true" />
+												{runningTasks === 1 ? "1 background task running" : `${runningTasks} background tasks running`}
+												<span className="tasks-chip-open">View</span>
+											</button>
+										)}
 										{(state.queue.steering.length > 0 || state.queue.followUp.length > 0) && (
 											<div className="queue">
 												{state.queue.steering.map((text, index) => (
@@ -555,6 +568,17 @@ export function App() {
 									model={state.session?.model ? `${state.session.model.provider}/${state.session.model.id}` : undefined}
 									transcript={mainTranscript}
 									hidden={sidePane !== "sidechat"}
+									expanded={paneExpanded}
+									onToggleExpand={() => setPaneExpanded(!paneExpanded)}
+									width={paneWidth}
+									onResize={resizePane}
+									onClose={() => showPane(null)}
+								/>
+							)}
+							{mounted.has("tasks") && (
+								<TasksPane
+									tasks={tasks}
+									hidden={sidePane !== "tasks"}
 									expanded={paneExpanded}
 									onToggleExpand={() => setPaneExpanded(!paneExpanded)}
 									width={paneWidth}

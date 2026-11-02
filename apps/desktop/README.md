@@ -78,6 +78,13 @@ To work on the UI in a browser instead, run `npm run server:watch` and `npm run 
   - Kokoro installs on demand from Settings → Voice into `~/.sorvex/agent/desktop/kokoro`, about 250MB plus a model of about 90MB.
 - **Visuals:** a mic level meter while recording, and a flame waveform above the composer while replies are spoken.
 
+**Background tasks**
+- For commands that keep running or take long (dev servers, `npx expo run:android`, watchers, long builds), the agent uses `task_start` instead of `bash`, so the chat is not blocked until they exit. `task_output` shows a task's latest output (optionally waiting for text such as `ready|Local:`), `task_stop` stops it, `task_list` lists them.
+- The desktop server owns these processes (`server/tasks.ts`): they keep running when a turn is stopped or the chat is switched, and end when stopped or when the app quits. Stopping one stops everything it started (its process group).
+- When a task the agent started exits on its own, the agent gets a follow-up message with the last output; tasks stopped by you or the agent end quietly.
+- `bash` refuses commands that never exit on their own (`npm run dev`, `npm start`, `npx expo start`/`run:android`, `next dev`, `docker compose up` without `-d`, `tail -f`, ...) and points the agent to `task_start`. Guardrails and tool permissions apply to `task_start` like `bash`.
+- The **Background tasks** pane (header button with the running count, or K in the surface launcher) lists running and finished tasks with live elapsed time and output; stop, run again, remove, or clear finished. A chip above the composer shows when tasks are running.
+
 **Floating preview**
 - Browser and Device can float over the chat as a small picture-in-picture window: just the page or the phone screen, still fully usable (click, scroll, type, touch).
 - Floating, the page keeps the size it had in the side pane (remembered across launches; 1280x800 before the pane was ever opened), or its fixed viewport, and is drawn scaled down into a window of that shape (like t3code), so the floating preview shows what the pane showed instead of reflowing to a cramped phone layout.

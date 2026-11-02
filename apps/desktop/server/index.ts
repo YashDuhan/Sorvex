@@ -31,6 +31,7 @@ import { SideChats } from "./sidechat.ts";
 import { Composio } from "./composio.ts";
 import { AndroidDevices, type DeviceAction } from "./devices.ts";
 import { type CommandInfo, listInstalledSkills, readSkillFile, removeSkill, SkillRegistry } from "./skills.ts";
+import { TaskManager } from "./tasks.ts";
 import { TerminalManager } from "./terminals.ts";
 import { type SpeechEndpoint, speak, transcribe } from "./voice.ts";
 import { changeSummary, type ChangedFile, currentBranch, fileDiff, listDir, readWorkspaceFile, searchFiles } from "./workspace.ts";
@@ -43,6 +44,7 @@ const ssh = new SshManager(hub);
 // The browser tools share the SSH tools' per-launch token, which only the bridge extension holds.
 const browser = new BrowserManager(hub, ssh.token);
 const devices = new AndroidDevices(hub, ssh.token);
+const tasks = new TaskManager(hub, ssh.token);
 const composio = new Composio();
 // The agent's built-in llama.cpp provider talks to the local engine on the Local models page.
 const agent = new Agent(hub, { SORVEX_DESKTOP_URL: `http://${HOST}:${PORT}`, LLAMA_BASE_URL: process.env.LLAMA_BASE_URL ?? llamaUrl });
@@ -389,6 +391,29 @@ const routes: Record<string, Handler> = {
 		return { ok: true };
 	},
 	"POST /api/device/agent/act": (body) => devices.agentAct(String(body.token), body.input as DeviceAction),
+
+	// Background tasks (server/tasks.ts): the agent starts them; the Background tasks pane watches and stops them.
+	"GET /api/tasks": () => tasks.list(),
+	"POST /api/tasks/agent/start": (body) =>
+		tasks.agentStart(String(body.token), { command: String(body.command ?? ""), cwd: String(body.cwd || agent.cwd), name: typeof body.name === "string" ? body.name : undefined }),
+	"POST /api/tasks/output": (body) => tasks.output(String(body.id), Number(body.since) || 0),
+	"POST /api/tasks/wait": (body) =>
+		tasks.wait(String(body.id), {
+			since: Number(body.since) || 0,
+			pattern: typeof body.pattern === "string" && body.pattern ? body.pattern : undefined,
+			timeoutMs: Number(body.timeoutMs) || 0,
+			quietMs: Number(body.quietMs) || undefined,
+		}),
+	"POST /api/tasks/stop": (body) => tasks.stop(String(body.id)),
+	"POST /api/tasks/restart": (body) => tasks.restart(String(body.id)),
+	"POST /api/tasks/remove": (body) => {
+		tasks.remove(String(body.id));
+		return { ok: true };
+	},
+	"POST /api/tasks/clear": () => {
+		tasks.clearFinished();
+		return { ok: true };
+	},
 	"POST /api/browser/agent/act": (body) => browser.agentAct(String(body.token), body.input as BrowserAction, body.approved === true),
 
 	"GET /api/kokoro": () => kokoro.status(),
@@ -563,6 +588,7 @@ function shutdown(): void {
 	void browser.close();
 	local.stop();
 	terminals.closeAll();
+	tasks.stopAll();
 	agent.stop();
 	kokoro.stop();
 	devices.stopHub();
