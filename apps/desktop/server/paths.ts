@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { getAgentDir } from "@sorvex/coding-agent";
@@ -21,3 +22,6 @@ export const kokoroDir = join(desktopDir, "kokoro");
 export const remotePath = join(desktopDir, "remote.json");
 
 export const hasSourceCheckout = existsSync(cliPath);
+
+/** The folder the app opens when none is chosen: the checkout in development, the home folder when installed. */
+export const defaultCwd = process.env.SORVEX_DESKTOP_CWD || (hasSourceCheckout ? repoRoot : homedir());

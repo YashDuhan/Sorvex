@@ -38,6 +38,22 @@ To work on the UI in a browser instead, run `npm run server:watch` and `npm run 
 
 `npm run check` typechecks the UI, the server and the extension.
 
+## Windows installer
+
+`npm run desktop:build:windows` cross-compiles an NSIS installer from Linux into `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/`. The installer bundles everything the app needs, so the target machine needs no Node or Sorvex install:
+
+- a pinned `node.exe` that runs the server,
+- the server bundled into one file (`scripts/bundle-server.mjs`),
+- the bridge extension,
+- `sorvex.exe` from `scripts/build-binaries.sh`,
+- the built UI.
+
+Requirements: `bun`, `cargo-xwin` (`cargo install --locked cargo-xwin`), `clang`, `lld`, `llvm`, `makensis` (`nsis`), and `rustup target add x86_64-pc-windows-msvc`. `cargo-xwin` downloads the MSVC CRT and Windows SDK on first use, under Microsoft's license.
+
+Pass `--skip-sorvex` (`bash scripts/build-windows.sh --skip-sorvex`) to reuse the staged `sorvex.exe` instead of rebuilding all packages.
+
+The integrated terminal (`server/shell_pty.py`) and SSH (`setsid`) rely on POSIX tools and do not work on Windows yet.
+
 ## Features
 
 **Chat**

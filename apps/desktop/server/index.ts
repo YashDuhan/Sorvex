@@ -20,7 +20,7 @@ import { Hub } from "./hub.ts";
 import { Kokoro } from "./kokoro.ts";
 import { addMcpServer, listMcpServers, mcpGlobalPath, removeMcpServer, setMcpServerEnabled, setMcpServerExposure } from "./mcp.ts";
 import { builtinAgents, changelog, deleteSession, exportJsonl, forkSession, listFiles, listSessions, readSorvexSettings, renameSession, writeSorvexSetting } from "./parity.ts";
-import { distDir, repoRoot, settingsPath } from "./paths.ts";
+import { defaultCwd, distDir, settingsPath } from "./paths.ts";
 import { type LocalSettings, LocalModels, llamaUrl } from "./local.ts";
 import { notify } from "./notify.ts";
 import { RemoteAccess } from "./remote.ts";
@@ -53,7 +53,7 @@ const credentials = await Credentials.create(hub);
 const kokoro = new Kokoro(hub);
 const terminals = new TerminalManager(hub);
 /** The Files, Changes and Terminal panes work in the agent's working directory. */
-const workspaceRoot = () => agent.cwd || process.env.SORVEX_DESKTOP_CWD || repoRoot;
+const workspaceRoot = () => agent.cwd || defaultCwd;
 const sideChats = new SideChats(hub, credentials, workspaceRoot);
 
 // The bridge extension reads this file on every tool call, so make the defaults real on first run.
@@ -136,7 +136,7 @@ const routes: Record<string, Handler> = {
 		terminals.close(Number(body.id));
 		return { ok: true };
 	},
-	"GET /api/state": () => ({ agent: agent.snapshot(), defaultCwd: process.env.SORVEX_DESKTOP_CWD ?? repoRoot, dialogs: agent.pendingDialogs() }),
+	"GET /api/state": () => ({ agent: agent.snapshot(), defaultCwd, dialogs: agent.pendingDialogs() }),
 
 	"POST /api/agent/cwd": (body) => {
 		agent.setCwd(String(body.cwd));
@@ -213,7 +213,7 @@ const routes: Record<string, Handler> = {
 		mimeType: "audio/wav",
 	}),
 
-	"GET /api/mcp": (_body, url) => listMcpServers(url.searchParams.get("cwd") || agent.cwd || repoRoot),
+	"GET /api/mcp": (_body, url) => listMcpServers(url.searchParams.get("cwd") || agent.cwd || defaultCwd),
 	"POST /api/mcp/add": async (body) => {
 		const result = addMcpServer(String(body.cwd || agent.cwd), body.scope === "project" ? "project" : "global", String(body.name), body.config);
 		await reloadAgent();
@@ -239,14 +239,14 @@ const routes: Record<string, Handler> = {
 		data: await agent.request({ type: "prompt", message: `/mcp ${String(body.action)} ${String(body.name ?? "")}`.trim() }),
 	}),
 
-	"GET /api/skills": (_body, url) => listInstalledSkills(url.searchParams.get("cwd") || agent.cwd || repoRoot, installedSkillCommands),
+	"GET /api/skills": (_body, url) => listInstalledSkills(url.searchParams.get("cwd") || agent.cwd || defaultCwd, installedSkillCommands),
 	"GET /api/skills/file": async (_body, url) => {
-		const cwd = url.searchParams.get("cwd") || agent.cwd || repoRoot;
+		const cwd = url.searchParams.get("cwd") || agent.cwd || defaultCwd;
 		const { skills } = await listInstalledSkills(cwd, installedSkillCommands);
 		return readSkillFile(cwd, String(url.searchParams.get("path")), skills.map((skill) => skill.path));
 	},
 	"POST /api/skills/remove": async (body) => {
-		const result = removeSkill(String(body.cwd || agent.cwd || repoRoot), String(body.path));
+		const result = removeSkill(String(body.cwd || agent.cwd || defaultCwd), String(body.path));
 		await reloadAgent();
 		return result;
 	},
@@ -260,7 +260,7 @@ const routes: Record<string, Handler> = {
 		}),
 	"GET /api/skills/registry/detail": (_body, url) => skillRegistry.detail(String(url.searchParams.get("id"))),
 	"POST /api/skills/registry/install": async (body) => {
-		const result = await skillRegistry.install(String(body.id), String(body.cwd || agent.cwd || repoRoot), body.scope === "project" ? "project" : "user");
+		const result = await skillRegistry.install(String(body.id), String(body.cwd || agent.cwd || defaultCwd), body.scope === "project" ? "project" : "user");
 		await reloadAgent();
 		return result;
 	},

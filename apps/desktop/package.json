@@ -12,7 +12,8 @@
 		"check": "tsc --noEmit -p . && tsc -p tsconfig.server.json",
 		"tauri": "tauri",
 		"desktop:dev": "tauri dev",
-		"desktop:build": "tauri build"
+		"desktop:build": "tauri build",
+		"desktop:build:windows": "bash scripts/build-windows.sh"
 	},
 	"dependencies": {
 		"@fontsource-variable/jetbrains-mono": "5.3.0",

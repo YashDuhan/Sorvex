@@ -3,9 +3,12 @@
 //! Thin desktop shell, the same shape as warpdrv's: start the Node server (apps/desktop/server), then show the
 //! UI. In development the window loads the Vite dev server, which proxies /api to the Node server. In a release
 //! build the window navigates to the Node server, which also serves the built UI.
+//!
+//! An installed app (see scripts/build-windows.sh) ships node, the bundled server and the Sorvex binary as
+//! resources; a release build without them runs the server from the checkout it was built in.
 
 use std::net::{SocketAddr, TcpStream};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::Mutex;
 use std::thread;
@@ -39,6 +42,29 @@ fn spawn_server(port: u16) -> Option<Child> {
 		.ok()
 }
 
+/// `node server/index.mjs` from the installed resources, with the bundled Sorvex binary as the agent.
+fn spawn_bundled_server(resources: &Path, port: u16) -> Option<Child> {
+	let server = resources.join("server").join("index.mjs");
+	if !server.exists() {
+		return None;
+	}
+	let exe = if cfg!(windows) { ".exe" } else { "" };
+	let mut command = Command::new(resources.join("node").join(format!("node{exe}")));
+	command
+		.arg(server)
+		.current_dir(resources)
+		.env("SORVEX_DESKTOP_PORT", port.to_string())
+		.env("SORVEX_DESKTOP_BIN", resources.join("sorvex").join(format!("sorvex{exe}")));
+	// Without this a console window opens next to the app; processes the server starts share the hidden console.
+	#[cfg(windows)]
+	{
+		use std::os::windows::process::CommandExt;
+		const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+		command.creation_flags(CREATE_NO_WINDOW);
+	}
+	command.spawn().map_err(|error| eprintln!("[sorvex-desktop] failed to start bundled server: {error}")).ok()
+}
+
 /// Lets the webview use the microphone for dictation. Only user-media requests are granted.
 #[cfg(target_os = "linux")]
 fn allow_microphone(window: &tauri::WebviewWindow) {
@@ -70,19 +96,25 @@ fn main() {
 	}
 
 	let port = port();
-	// Reuse a server that is already running, e.g. one started by `npm run dev`.
-	let child = if is_listening(port) { None } else { spawn_server(port) };
 
 	let app = tauri::Builder::default()
 		.plugin(tauri_plugin_dialog::init())
-		.manage(Server(Mutex::new(child)))
 		.setup(move |app| {
+			// Reuse a server that is already running, e.g. one started by `npm run dev`.
+			let child = if is_listening(port) {
+				None
+			} else {
+				let resources: Option<PathBuf> = if cfg!(debug_assertions) { None } else { app.path().resource_dir().ok() };
+				resources.and_then(|dir| spawn_bundled_server(&dir, port)).or_else(|| spawn_server(port))
+			};
+			app.manage(Server(Mutex::new(child)));
 			let window = app.get_webview_window("main").expect("main window");
 			#[cfg(target_os = "linux")]
 			allow_microphone(&window);
 			if !cfg!(debug_assertions) {
 				thread::spawn(move || {
-					for _ in 0..150 {
+					// A first launch on Windows can be slow while antivirus scans node and the server bundle.
+					for _ in 0..300 {
 						if is_listening(port) {
 							break;
 						}

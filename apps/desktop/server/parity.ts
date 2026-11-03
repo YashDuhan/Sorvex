@@ -147,8 +147,10 @@ export function exportJsonl(sessionFile: string, target: string): { path: string
 }
 
 export function changelog(): string {
-	const path = join(repoRoot, "packages/coding-agent/CHANGELOG.md");
-	return existsSync(path) ? readFileSync(path, "utf8") : "No changelog found.";
+	// A checkout keeps it in the package; an installed app ships it next to the bundled Sorvex binary.
+	const bin = process.env.SORVEX_DESKTOP_BIN;
+	const path = [join(repoRoot, "packages/coding-agent/CHANGELOG.md"), bin && join(dirname(bin), "CHANGELOG.md")].find((file) => file && existsSync(file));
+	return path ? readFileSync(path, "utf8") : "No changelog found.";
 }
 
 export function builtinAgents() {

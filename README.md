@@ -8,6 +8,32 @@ Customize Sorvex with [extensions](packages/coding-agent/docs/extensions.md), [s
 
 Use Sorvex [interactively](packages/coding-agent/docs/usage.md), automate it in [print or JSON mode](packages/coding-agent/docs/cli.md), control it over [RPC](packages/coding-agent/docs/rpc.md), or build apps with the [Sorvex TypeScript SDK](packages/coding-agent/docs/sdk.md).
 
+## Features
+
+**Agent**
+- Three modes: build, [plan](packages/coding-agent/docs/plan-mode.md), and [security](packages/coding-agent/docs/security-mode.md).
+- Built-in [subagents](packages/coding-agent/docs/subagents.md) and a [todo list](packages/coding-agent/docs/todo.md).
+- [Code mode](packages/coding-agent/docs/codemode.md): the model writes code that calls tools.
+- [Sessions](packages/coding-agent/docs/sessions.md) you can resume and branch, with automatic [compaction](packages/coding-agent/docs/compaction.md) of long contexts.
+
+**Models**
+- Many [providers](packages/coding-agent/docs/providers.md) through one API, signed in with a subscription or an API key.
+- [Local models](packages/coding-agent/docs/llama-cpp.md) through llama.cpp, plus [custom providers](packages/coding-agent/docs/custom-provider.md) and [virtual models](packages/coding-agent/docs/virtual-models.md).
+
+**Customization**
+- [Extensions](packages/coding-agent/docs/extensions.md), [skills](packages/coding-agent/docs/skills.md), [prompt templates](packages/coding-agent/docs/prompt-templates.md), [themes](packages/coding-agent/docs/themes.md), and [keybindings](packages/coding-agent/docs/keybindings.md).
+- [MCP](packages/coding-agent/docs/mcp.md) server support.
+- [Sorvex packages](packages/coding-agent/docs/packages.md) to share all of the above via npm or git.
+
+**Integration**
+- Interactive TUI, print and [JSON](packages/coding-agent/docs/json.md) modes, [RPC](packages/coding-agent/docs/rpc.md), and the [TypeScript SDK](packages/coding-agent/docs/sdk.md).
+- Standalone binaries for macOS, Linux, and [Windows](packages/coding-agent/docs/windows.md).
+
+**Desktop app**
+- Chat, a browser the agent can drive, files, git changes, terminals, and background tasks.
+- Guardrails, SSH hosts, Android devices, local models, and voice.
+- Windows x64 installer built from Linux (see [Desktop app](#desktop-app)).
+
 ## Getting started
 
 Sorvex is not published to npm yet; run it from this repository. It needs Node.js 22.19 or newer.
@@ -36,7 +62,7 @@ It needs Rust 1.90+ and the Tauri system libraries. Start it with:
 cd apps/desktop && npm run desktop:dev
 ```
 
-See [apps/desktop/README.md](apps/desktop/README.md) for details.
+To build a Windows x64 installer (`Sorvex_<version>_x64-setup.exe`) from Linux, run `npm run desktop:build:windows` in `apps/desktop`. See [apps/desktop/README.md](apps/desktop/README.md) for details and requirements.
 
 ## Packages
 
