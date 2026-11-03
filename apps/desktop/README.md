@@ -48,7 +48,7 @@ To work on the UI in a browser instead, run `npm run server:watch` and `npm run 
 - `sorvex.exe` from `scripts/build-binaries.sh`,
 - the built UI.
 
-Requirements: `bun`, `cargo-xwin` (`cargo install --locked cargo-xwin`), `clang`, `lld`, `llvm`, `makensis` (`nsis`), and `rustup target add x86_64-pc-windows-msvc`. `cargo-xwin` downloads the MSVC CRT and Windows SDK on first use, under Microsoft's license.
+Requirements: `bun`, `cargo-xwin` (`cargo install --locked cargo-xwin`), `clang`, `lld`, `llvm`, `makensis` (`nsis`), and `rustup target add x86_64-pc-windows-msvc`. `cargo-xwin` downloads the MSVC CRT and Windows SDK on first use, under Microsoft's license. Linux NSIS builds only ship 64-bit stubs, so the script also fetches the official NSIS Windows release (pinned, checksum-verified) for the x86 stubs and plugins Tauri's installer script needs.
 
 Pass `--skip-sorvex` (`bash scripts/build-windows.sh --skip-sorvex`) to reuse the staged `sorvex.exe` instead of rebuilding all packages.
 

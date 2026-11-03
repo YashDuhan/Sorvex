@@ -21,6 +21,10 @@ set -euo pipefail
 
 NODE_VERSION="v26.13.0"
 NODE_SHA256="14319838b3f355e0398c13569a90270bce4fc68f25189f58c59b03dadae0e6d5"
+# Linux NSIS builds ship only amd64 stubs, but Tauri's installer script and plugin target x86-unicode. Its data
+# directory (stubs, plugins, includes) comes from the official Windows release of the same version as makensis.
+NSIS_VERSION="3.13"
+NSIS_SHA256="ba63dffc4410ee89193e1cb5a41989991bd77c61068da17e3156d136b7b0b3d8"
 TARGET="x86_64-pc-windows-msvc"
 
 SKIP_SORVEX=false
@@ -76,6 +80,28 @@ fi
 rm -rf "$STAGE_DIR/node"
 mkdir -p "$STAGE_DIR/node"
 cp "$node_exe" "$STAGE_DIR/node/node.exe"
+
+echo "==> NSIS $NSIS_VERSION data"
+makensis_version="$(makensis -VERSION)"
+[[ "$makensis_version" == "v$NSIS_VERSION" ]] || { echo "makensis is $makensis_version; this script expects v$NSIS_VERSION"; exit 1; }
+nsis_zip="$CACHE_DIR/nsis-$NSIS_VERSION.zip"
+if [[ ! -f "$nsis_zip" ]] || ! echo "$NSIS_SHA256  $nsis_zip" | sha256sum --check --status; then
+	curl -fsSL "https://downloads.sourceforge.net/project/nsis/NSIS%203/$NSIS_VERSION/nsis-$NSIS_VERSION.zip" -o "$nsis_zip.part"
+	echo "$NSIS_SHA256  $nsis_zip.part" | sha256sum --check --quiet
+	mv "$nsis_zip.part" "$nsis_zip"
+fi
+rm -rf "$CACHE_DIR/nsis-$NSIS_VERSION"
+unzip -q "$nsis_zip" -d "$CACHE_DIR"
+# makensis loads its default (amd64) stub before reading any script, so keep those, then switch every script to x86.
+system_nsisdir="$(env -u NSISDIR makensis -HDRINFO | grep -o 'NSISDIR=[^,]*' | cut -d= -f2)"
+nsis_dir="$CACHE_DIR/nsis-$NSIS_VERSION"
+cp "$system_nsisdir"/Stubs/*-amd64-unicode "$nsis_dir/Stubs/"
+printf '\nTarget x86-unicode\n' >>"$nsis_dir/nsisconf.nsh"
+# Tauri sets NSISDIR and NSISCONFDIR for makensis itself, so point them at this directory from a wrapper instead.
+mkdir -p "$CACHE_DIR/bin"
+printf '#!/bin/sh\nexec env NSISDIR="%s" NSISCONFDIR="%s" "%s" "$@"\n' "$nsis_dir" "$nsis_dir" "$(command -v makensis)" >"$CACHE_DIR/bin/makensis"
+chmod +x "$CACHE_DIR/bin/makensis"
+export PATH="$CACHE_DIR/bin:$PATH"
 
 echo "==> Desktop server"
 node "$APP_DIR/scripts/bundle-server.mjs" "$STAGE_DIR"
